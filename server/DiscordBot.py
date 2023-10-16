@@ -2,72 +2,136 @@ from dotenv import load_dotenv
 import discord
 import os
 
-# Set intents for initialization
+# Set intents
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 # Commands array
 cmds = ["[+] !selecthero {HeroName} - To select a hero as soon as a game is found.\n\n",
         "[+] !remindme - Sends you a reminder message to invite your friends after a game is finished.\n\n",
-        "[+] !cancelreminder - Cancels the scheduled reminder, if one was planned.\n\n"
+        "[+] !cancelreminder - Cancels the scheduled reminder, if one was planned.\n\n",
+        "[+] !cancelqueue - Cancels your Overwatch queue.\n\n",
+        "[+] !exitgame - Terminates your active Overwatch game client.\n\n",
+        "[+] !exit - Terminates your active Overwatch Queue Notifier client.\n\n",
         ]
 
 
 class DiscordBot(discord.Client):
-    def __init__(self):
+    def __init__(self, server):
         super().__init__(intents=intents)
+        self.server = server
+        self.__reminder = False  # To reduce unnecessary communication between client-server, we'll hold this to keep
+        # track of the reminder flag in the server.
 
     async def on_ready(self):
-        print(f'Logged in as {self.user.name}')
+        print(f'Bot is logged in as {self.user.name}')
 
     async def on_message(self, message):
         if message.author == self.user:
             return
 
-        if message.content == '!selecthero':
-            await self.select_hero(message.author)
+        user_id = str(message.author.id)
+        clients = self.server.get_connected_clients()
 
-        elif message.content == '!remindme':
-            await self.reminder_invitation(message.author)
+        if user_id in clients:
+            client_socket = clients[user_id]
+            if message.content == '!remindme':
+                try:
+                    client_socket.send(b'set_reminder_true')
+                    await self.reminder_invitation(message.author)
+                    self.__reminder = True
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
-        elif message.content == '!cancelreminder':
-            await self.cancel_reminder_invitation(message.author)
+            elif message.content == '!cancelreminder':
+                try:
+                    client_socket.send(b'set_reminder_false')
+                    await self.cancel_reminder_invitation(message.author)
+                    self.__reminder = False
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
-        elif message.content == '!commands':
-            await self.send_commands(message.author)
+            elif message.content == '!testgamefinished':
+                try:
+                    client_socket.send(b'test_game_finished')
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
-        # Maybe check if author of message has a certain role, and if not, pass.
-        elif message.content == '!adminsecret - commands':
-            await self.announce_commands()
+            elif message.content == '!exit':
+                try:
+                    client_socket.send(b'test_exit')
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
+
+            elif message.content == '!exitgame':
+                try:
+                    client_socket.send(b'test_exit_game')
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
+
+            elif message.content == '!commands':
+                await self.send_commands(message.author)
+
+            if message.content == '!selecthero':
+                await self.select_hero(message.author)
+
+            # Admin Zone
+            if message.guild and message.author == message.guild.owner:
+                if message.content == '!admin-cmd':
+                    await self.announce_commands()
+
+    async def send_user_reminder(self, user_id):
+        user = self.get_user(int(user_id))
+        if user:
+            await user.send("Reminder - Invite your friend/s :)")
+        else:
+            print('Error - user not found. Make sure to provide the correct user id.')
+
+    async def send_socket_user_id_by_username(self, username, socket_conn):
+        user = discord.utils.get(self.users, name=username)
+        print(f'User retrieved by discord bot is: {user}')
+        if user is not None:
+            socket_conn.send(str(user.id).encode())
+        else:
+            socket_conn.send(b'$user_id_not_found')
+
+    async def format_commands(self):
+        # Format the commands in a message.
+        msg = ''
+        for cmd in cmds:
+            msg += cmd
+
+        return msg
 
     async def announce_commands(self):
         # Load .env
         load_dotenv()
         channel = self.get_channel(int(os.getenv('DISCORD_INFORMATION_CHANNEL_ID')))
 
-        # Format the commands in a message.
-        msg = ''
-        for cmd in cmds:
-            msg += cmd
-
         # Send the formatted commands.
-        await channel.send(msg)
-
+        await channel.send(await self.format_commands())
 
     async def send_commands(self, user):
-        # Format the commands in a message.
-        msg = ''
-        for cmd in cmds:
-            msg += cmd
-
         # Send the formatted commands.
-        await user.send(msg)
+        await user.send(await self.format_commands())
 
     async def select_hero(self, user):
+        # Send hero name to client for selection.
         await user.send('I will select {TEST} hero for you.')
 
     async def reminder_invitation(self, user):
-        await user.send("I will remind you to invite your friend, after your game.")
+        # Activate reminder bool in client.
+        # If the reminder bool in client is already activated, send a different message.
+        if self.__reminder:
+            await user.send("Reminder is already set. I will remind you to invite your friend, after your game.")
+        else:
+            await user.send("I will remind you to invite your friend, after your game.")
 
     async def cancel_reminder_invitation(self, user):
-        await user.send("I won't remind you this time.")
+        # Deactivate reminder bool in client.
+        # If the reminder bool in client is not activated, send a different message.
+        if not self.__reminder:
+            await user.send("There are no reminders scheduled.")
+        else:
+            await user.send("Reminder cancelled.")
