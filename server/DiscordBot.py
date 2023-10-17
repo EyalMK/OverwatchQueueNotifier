@@ -34,6 +34,31 @@ class DiscordBot(discord.Client):
         user_id = str(message.author.id)
         clients = self.server.get_connected_clients()
 
+        # Connection messages.
+        if message.content == '!connect':
+            awaiting_connections = self.server.get_awaiting_connections()
+            if user_id in awaiting_connections:
+                if user_id in clients:
+                    await message.author.send('User ID already connected from a client. Exiting client...')
+                    clients[user_id].send(b'$user_already_logged_in')
+                    return
+                else:
+                    try:
+                        self.server.add_client(user_id, awaiting_connections[user_id])  # (
+                        # discord id, socket connection)
+                        response = f'!authorized_login {message.author.global_name}'.encode()
+                        clients[user_id].send(response)
+                        print(f'Received authorization from {user_id}')
+                        await message.author.send(f'Connection authorized.')
+                        print(f'Client connected.')
+                        print(f'Active connections: {len(clients)}')
+                    except OSError as e:
+                        self.server.remove_client(user_id, awaiting_connections[user_id])
+                        await message.author.send(f'Client is not connected to server. Restart client and try again!')
+                        print(f'Socket not found. Error: {e}')
+            else:
+                await message.author.send(f'Connection failed. Invalid ID.')
+
         if user_id in clients:
             client_socket = clients[user_id]
             if message.content == '!remindme':
@@ -87,14 +112,6 @@ class DiscordBot(discord.Client):
             await user.send("Reminder - Invite your friend/s :)")
         else:
             print('Error - user not found. Make sure to provide the correct user id.')
-
-    async def send_socket_user_id_by_username(self, username, socket_conn):
-        user = discord.utils.get(self.users, name=username)
-        print(f'User retrieved by discord bot is: {user}')
-        if user is not None:
-            socket_conn.send(str(user.id).encode())
-        else:
-            socket_conn.send(b'$user_id_not_found')
 
     async def format_commands(self):
         # Format the commands in a message.

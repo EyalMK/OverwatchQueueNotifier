@@ -1,15 +1,14 @@
 import socket
-import threading
 from threading import Thread
-from ClientUI import MainWindow, DiscordPopUp
-from QueueWatcher import QueueWatcher
+from ClientUI import MainWindow, LoginScreen
+from ClientHandler import ClientHandler
 
 
 class App:
     def __init__(self):
         self.client_socket = None
         self.client = None  # Tkinter Window
-        self.queue_watcher = None
+        self.client_handler = None
 
     def socket_connection(self):
         try:
@@ -19,17 +18,20 @@ class App:
         except ConnectionRefusedError:
             print('Connection refused.')
 
-    def init_queue_watcher(self):
-        self.queue_watcher = QueueWatcher(self.client_socket)
-        self.queue_watcher.run()
+    def init_client_handler(self):
+        self.client_handler = ClientHandler(self.client_socket, self)
+        self.client_handler.run()
 
-    def init_gui(self):
-        self.client = DiscordPopUp(self.queue_watcher, self.switch_to_main_window)
-        self.client.window.mainloop()
+    def init_client(self):
+        self.client = LoginScreen(self.client_handler, self.switch_to_main_window)
+        self.client.show()
+
+    def get_client_ui(self):
+        return self.client
 
     def switch_to_main_window(self):
         self.client.window.destroy()
-        self.client = MainWindow(self.queue_watcher)
+        self.client = MainWindow()
         self.client.show()
 
     def start(self):
@@ -41,10 +43,10 @@ class App:
         socket_thread.join(timeout=5)  # Adjust timeout as needed
 
         # Initialize Queue Watcher Object
-        self.init_queue_watcher()
+        self.init_client_handler()
 
-        # Initialize Window Object
-        self.init_gui()
+        # Initialize Tkinter
+        self.init_client()
 
 
 def main():

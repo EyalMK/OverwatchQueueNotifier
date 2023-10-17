@@ -3,13 +3,15 @@ import psutil
 from threading import Thread
 
 
-class QueueWatcher:
+class ClientHandler:
     reminder = False
+    connected_as = None  # Discord user
 
-    def __init__(self, socket):
+    def __init__(self, socket, client_app):
         self.client_socket = socket
-        print("Queue Watcher is running...")
-        # Listen to bot messages
+        self.client_app = client_app
+        print("Client Handler is running...")
+
         self.run()
 
     def receive_messages(self):
@@ -27,10 +29,12 @@ class QueueWatcher:
                     self.exit_program()
                 elif message == 'test_exit_game':
                     self.exit_game()
-                elif message == '$user_id_not_found': # Error message from server.
+                elif message == '$user_id_not_found' or message == '$user_already_logged_in':  # Error messages from
+                    # server.
                     self.exit_program()
-                else: # It's a user id. Send it to the server.
-                    self.client_socket.send(message.encode())
+
+                if message.startswith('!authorized_login'):  # Command message from server.
+                    self.authorized_login(message)
             except Exception as e:
                 print(f'Waiting for a message... {e}')
                 time.sleep(3)
@@ -65,13 +69,21 @@ class QueueWatcher:
             print('Reminding user...')
             self.client_socket.send(b'!remind_user')
 
-    def link_discord_user(self, discord_username):
+    def link_discord_user(self, discord_id):
         try:
-            message = f'!get_user_id {discord_username}'
+            message = f'!get_connection_authorization {discord_id}'
             self.client_socket.send(message.encode())
-            print(f'Connected discord user to server.')
         except Exception as e:
             print(f'Error - Could not connect discord user to server. {e}')
+
+    def authorized_login(self, message):
+        try:
+            username = message.split(' ')[1]
+            self.connected_as = username
+            print(f'Connected discord user {self.connected_as} to server.')
+            self.client_app.switch_to_main_window()
+        except Exception as e:
+            print(f'Error connecting to server. Restart and try again please. {e}')
 
     def exit_program(self):
         pass
@@ -83,4 +95,3 @@ class QueueWatcher:
                 print(f"Terminating {process.info['name']} (PID: {process.info['pid']})")
                 process.terminate()
                 return
-

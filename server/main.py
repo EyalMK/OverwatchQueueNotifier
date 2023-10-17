@@ -10,7 +10,7 @@ class App:
     def __init__(self):
         self.discord_bot = None
         self.connected_clients = {}
-        self.active_connections = 0
+        self.awaiting_connections = {}
 
     def init_discord(self):
         self.discord_bot = DiscordBot(self)
@@ -21,6 +21,9 @@ class App:
 
     def get_connected_clients(self):
         return self.connected_clients
+
+    def get_awaiting_connections(self):
+        return self.awaiting_connections
 
     def socket_connection(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -37,24 +40,16 @@ class App:
                     except ConnectionResetError:
                         break
 
-                    # Read message - if command, take care of it. Otherwise, it's a user_id.
+                    # Read message - if command, take care of it.
                     if not message:
                         break
-                    print(f'Server: got message {message}')
+                    print(f'Received message {message}')
                     if message.startswith("!"):
                         self.handle_command(message, socket_conn)
-                    else:
-                        self.add_client(message, socket_conn)
-                        print("Accepted connection from client")
-                        self.active_connections += 1
-                        print(f'Current active connections: {self.active_connections}')
             finally:
                 self.remove_client(socket_conn)
-                socket_conn.close()
-                print("Client disconnected")
-                self.active_connections -= 1
-                print(f'Current active connections: {self.active_connections}')
-
+                print(f'Client disconnected.')
+                print(f'Active connections: {len(self.connected_clients)}')
 
     def handle_command(self, message, socket_conn):
         if message == '!remind_user':
@@ -62,12 +57,13 @@ class App:
             # Since a thread is handling the socket communication, and the call to send the user a message needs to
             # be asynchronous, we need to run the co-routine In a threadsafe environment.
             asyncio.run_coroutine_threadsafe(self.discord_bot.send_user_reminder(sender_id), self.discord_bot.loop)
-        elif message.startswith('!get_user_id'):
-            username = message.split(' ')[1]
-            if not username:
+        elif message.startswith('!get_connection_authorization'):
+            discord_id = message.split(' ')[1]
+            if not discord_id:
                 raise Exception("Username not provided.")
-            print(f'Getting user id now... {username}')
-            asyncio.run_coroutine_threadsafe(self.discord_bot.send_socket_user_id_by_username(username, socket_conn), self.discord_bot.loop)
+
+            self.awaiting_connections[discord_id] = socket_conn
+            print(f'Awaiting authorization from {discord_id}...')
 
     def get_user_id_from_socket(self, socket_conn):
         try:
