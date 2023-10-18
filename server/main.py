@@ -52,11 +52,26 @@ class App:
                 print(f'Active connections: {len(self.connected_clients)}')
 
     def handle_command(self, message, socket_conn):
+        # Since a thread is handling the socket communication, and the call to send the user a message needs to
+        # be asynchronous, we need to run the co-routines in a threadsafe environment.
+
         if message == '!remind_user':
             sender_id = self.get_user_id_from_socket(socket_conn)
-            # Since a thread is handling the socket communication, and the call to send the user a message needs to
-            # be asynchronous, we need to run the co-routine In a threadsafe environment.
             asyncio.run_coroutine_threadsafe(self.discord_bot.send_user_reminder(sender_id), self.discord_bot.loop)
+
+        elif message == '!found_game':
+            sender_id = self.get_user_id_from_socket(socket_conn)
+            asyncio.run_coroutine_threadsafe(self.discord_bot.notify_user_game_found(sender_id), self.discord_bot.loop)
+
+        elif message == '!select_hero_invalid_error':
+            sender_id = self.get_user_id_from_socket(socket_conn)
+            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_invalid(sender_id), self.discord_bot.loop)
+
+        elif message == '!select_hero_success':
+            sender_id = self.get_user_id_from_socket(socket_conn)
+            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_success(sender_id),
+                                             self.discord_bot.loop)
+
         elif message.startswith('!get_connection_authorization'):
             discord_id = message.split(' ')[1]
             if not discord_id:

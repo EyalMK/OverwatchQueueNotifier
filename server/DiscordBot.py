@@ -83,6 +83,19 @@ class DiscordBot(discord.Client):
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
+            elif message.content == '!testcancelqueue':
+                try:
+                    client_socket.send(b'test_cancel_queue')
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
+
+            elif message.content.startswith('!testselecthero'):
+                try:
+                    hero = message.split(' ')[1]
+                    client_socket.send(f'!test_select_hero {hero}'.encode())
+                except Exception as e:
+                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
+
             elif message.content == '!exit':
                 try:
                     client_socket.send(b'test_exit')
@@ -91,7 +104,7 @@ class DiscordBot(discord.Client):
 
             elif message.content == '!exitgame':
                 try:
-                    client_socket.send(b'test_exit_game')
+                    client_socket.send(b'exit_game')
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
@@ -110,6 +123,27 @@ class DiscordBot(discord.Client):
         user = self.get_user(int(user_id))
         if user:
             await user.send("Reminder - Invite your friend/s :)")
+        else:
+            print('Error - user not found. Make sure to provide the correct user id.')
+
+    async def notify_user_game_found(self, user_id):
+        user = self.get_user(int(user_id))
+        if user:
+            await user.send("A competitive match was found!")
+        else:
+            print('Error - user not found. Make sure to provide the correct user id.')
+
+    async def inform_user_select_hero_invalid(self, user_id):
+        user = self.get_user(int(user_id))
+        if user:
+            await user.send("The hero you requested does not exist. Invalid input.")
+        else:
+            print('Error - user not found. Make sure to provide the correct user id.')
+
+    async def inform_user_select_hero_success(self, user_id):
+        user = self.get_user(int(user_id))
+        if user:
+            await user.send("Hero has been selected.")
         else:
             print('Error - user not found. Make sure to provide the correct user id.')
 

@@ -28,9 +28,8 @@ class MainWindow:
 
 
 class LoginScreen:
-    def __init__(self, client_handler, on_success_callback):
+    def __init__(self, client_handler):
         self.client_handler = client_handler
-        self.on_success_callback = on_success_callback
         self.window = tk.Tk()
         self.id_var = tk.StringVar()
         self.wait_var = tk.StringVar()
@@ -68,3 +67,9 @@ class LoginScreen:
 
     def show(self):
         self.window.mainloop()
+
+    def hide(self):
+        new_client = MainWindow()
+        new_client.show()
+        self.window.destroy()
+        return new_client

@@ -23,16 +23,15 @@ class App:
         self.client_handler.run()
 
     def init_client(self):
-        self.client = LoginScreen(self.client_handler, self.switch_to_main_window)
+        self.client = LoginScreen(self.client_handler)
         self.client.show()
 
     def get_client_ui(self):
         return self.client
 
     def switch_to_main_window(self):
-        self.client.window.destroy()
-        self.client = MainWindow()
-        self.client.show()
+        new_client = self.client.hide()
+        self.client = new_client
 
     def start(self):
         # Establish socket connection
