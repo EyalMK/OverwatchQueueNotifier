@@ -91,7 +91,8 @@ class DiscordBot(discord.Client):
 
             elif message.content.startswith('!testselecthero'):
                 try:
-                    hero = message.split(' ')[1]
+                    parts = message.content.split(' ')[1::]
+                    hero = " ".join(parts)
                     client_socket.send(f'!test_select_hero {hero}'.encode())
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')

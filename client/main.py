@@ -41,7 +41,7 @@ class App:
         # Allow some time for the socket connection to be established
         socket_thread.join(timeout=5)  # Adjust timeout as needed
 
-        # Initialize Queue Watcher Object
+        # Initialize Client Handler
         self.init_client_handler()
 
         # Initialize Tkinter

@@ -1,7 +1,7 @@
 import time
 import psutil
 from threading import Thread
-import QueueWatcher
+from QueueWatcher import QueueWatcher
 
 # Heroes
 tanks = {
@@ -120,7 +120,7 @@ class ClientHandler:
 
     def select_hero(self, message):
         try:
-            self.select_hero_failure = False # Reset in-case the user selected another hero after a failed attempt.
+            self.select_hero_failure = False  # Reset in-case the user selected another hero after a failed attempt.
             parts = message.split(' ')[1::]
             hero = " ".join(parts)
             if hero in heroes:
