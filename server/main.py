@@ -72,6 +72,11 @@ class App:
             asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_success(sender_id),
                                              self.discord_bot.loop)
 
+        elif message == '!queue_cancellation_success':
+            sender_id = self.get_user_id_from_socket(socket_conn)
+            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_cancel_queue_success(sender_id),
+                                             self.discord_bot.loop)
+
         elif message.startswith('!disconnect'):
             try:
                 discord_id = message.split(' ')[1]
@@ -80,7 +85,16 @@ class App:
                         self.remove_awaiting_connection(discord_id)
                     self.remove_client(socket_conn)
             except Exception as e:
-                print(f'Disconnection completed insuccessfully. Failed to remove closed socket from server. {e}')
+                print(f'Disconnection completed unsuccessfully. Failed to remove closed socket from server. {e}')
+
+        elif message.startswith('!queue_cancellation_failed'):
+            try:
+                errno = message.split(' ')[1]
+                sender_id = self.get_user_id_from_socket(socket_conn)
+                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_cancel_queue_failure(sender_id, errno),
+                                                 self.discord_bot.loop)
+            except Exception as e:
+                print(f'Error logging queue cancellation failure. {e}')
 
         elif message.startswith('!get_connection_authorization'):
             username = message.split(' ')[1]

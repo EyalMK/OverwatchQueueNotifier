@@ -80,9 +80,9 @@ class ClientHandler:
                     self.deactivate_reminder()
                 elif message == 'test_game_finished':
                     self.game_finished()
-                elif message == 'test_cancel_queue':
+                elif message == 'cancel_queue':
                     self.cancel_queue()
-                elif message == 'test_exit':
+                elif message == 'exit':
                     self.exit_program()
                 elif message == 'exit_game':
                     self.exit_game()
@@ -118,6 +118,12 @@ class ClientHandler:
 
     def cancel_queue(self):
         self.queue_watcher.cancel_queue()
+
+    def cancel_queue_failure(self, errno):
+        self.client_socket.send(f'!queue_cancellation_failed {errno}'.encode())
+
+    def cancel_queue_success(self):
+        self.client_socket.send(b'!queue_cancellation_success')
 
     def set_select_hero_failure(self):
         self.select_hero_failure = True
