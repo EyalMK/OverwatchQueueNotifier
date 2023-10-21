@@ -72,13 +72,27 @@ class App:
             asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_success(sender_id),
                                              self.discord_bot.loop)
 
-        elif message.startswith('!get_connection_authorization'):
-            discord_id = message.split(' ')[1]
-            if not discord_id:
-                raise Exception("Username not provided.")
+        elif message.startswith('!disconnect'):
+            try:
+                discord_id = message.split(' ')[1]
+                if discord_id is not None:
+                    if discord_id in self.awaiting_connections.keys():
+                        self.remove_awaiting_connection(discord_id)
+                    self.remove_client(socket_conn)
+            except Exception as e:
+                print(f'Disconnection completed insuccessfully. Failed to remove closed socket from server. {e}')
 
-            self.awaiting_connections[discord_id] = socket_conn
-            print(f'Awaiting authorization from {discord_id}...')
+        elif message.startswith('!get_connection_authorization'):
+            username = message.split(' ')[1]
+            if not username:
+                print("Username not provided.")
+                return
+
+            task = asyncio.run_coroutine_threadsafe(self.discord_bot.send_socket_user_id_by_username(username),
+                                             self.discord_bot.loop)
+            user_id = str(task.result())
+            self.awaiting_connections[user_id] = socket_conn
+            print(f'Awaiting authorization from {user_id}...')
 
     def get_user_id_from_socket(self, socket_conn):
         try:
@@ -99,6 +113,12 @@ class App:
             del self.connected_clients[self.get_user_id_from_socket(socket_conn)]
         except Exception as e:
             print(f'Failed to disconnect client from server. Error. {e}')
+
+    def remove_awaiting_connection(self, user_id):
+        try:
+            del self.awaiting_connections[user_id]
+        except Exception as e:
+            print(f'Failed to remove client from awaiting connections list. {e}')
 
 
 def socket_listen(app):

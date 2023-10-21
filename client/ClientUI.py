@@ -1,31 +1,10 @@
 import tkinter as tk
+import os
+import sys
 
-
-class MainWindow:
-    def __init__(self):
-        self.window = tk.Tk()
-        self.build_client_ui()
-
-    def build_client_ui(self):
-        self.window.title('Overwatch Queue Notifier')
-        self.window.geometry('700x120')
-
-        rdy_label = tk.Label(self.window, text="Client is launched...")
-        txt1 = tk.Text(self.window, height=2)
-        txt2 = tk.Text(self.window, height=2)
-
-        txt1.insert('1.0',
-                    "Minimize the application and communicate with the discord bot using the commands in the "
-                    "information channel.")
-        txt2.insert('1.0', "The application will now actively notify you when a game is found.")
-
-        rdy_label.pack()
-        txt1.pack()
-        txt2.pack()
-
-    def show(self):
-        self.window.mainloop()
-
+favicon_path = os.getcwd() + '\\assets\\images\\favicon.ico'  # Dev env default path
+if getattr(sys, 'frozen', False):
+    favicon_path = os.path.join(sys._MEIPASS, './assets/images/favicon.ico')  # Client path
 
 class LoginScreen:
     def __init__(self, client_handler):
@@ -35,23 +14,28 @@ class LoginScreen:
         self.wait_var = tk.StringVar()
         self.response_var = tk.StringVar()
         self.build_popup_ui()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)  # To terminate the socket connection through the
+        # client handler.
 
     def submit(self):
-        id = self.id_var.get()
+        username = self.id_var.get()
         try:
             self.wait_var.set(f'Waiting for discord user to message bot with !connect.')
-            self.client_handler.link_discord_user(id)
+            self.client_handler.link_discord_user(username)
         except Exception as e:
             self.response_var.set('Failed to connect. Please enter a valid Discord username, and make sure you are in '
                                   f'the Discord server. {e}')
 
     def build_popup_ui(self):
-        self.window.title('Overwatch Queue Notifier - Discord')
+        self.window.title('Overwatch Queue Notifier - Discord Bot Edition')
+
+        path = favicon_path
+        self.window.iconbitmap(path)
         self.window.geometry('700x200')
 
-        rdy_label = tk.Label(self.window, text="Link your discord, by entering your discord ID and messaging the "
+        rdy_label = tk.Label(self.window, text="Link your discord, by entering your discord username (Not display name) and messaging the "
                                                "discord bot !connect")
-        id_label = tk.Label(self.window, text="Discord User ID")
+        id_label = tk.Label(self.window, text="Discord Username")
         id_entry = tk.Entry(self.window, textvariable=self.id_var)
         wait_label = tk.Label(self.window, textvariable=self.wait_var)
         response_label = tk.Label(self.window, textvariable=self.response_var)
@@ -68,8 +52,5 @@ class LoginScreen:
     def show(self):
         self.window.mainloop()
 
-    def hide(self):
-        new_client = MainWindow()
-        new_client.show()
-        self.window.destroy()
-        return new_client
+    def on_closing(self):
+        self.client_handler.exit_program()

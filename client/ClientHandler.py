@@ -53,13 +53,16 @@ supports = {
 
 heroes = [item for hero in [tanks, dps, supports] for values in hero.values() for item in values]
 
+
 class ClientHandler:
+    socket_thread_running = False
     reminder = False
     connected_as = None  # Discord user
     queue_watcher = None
     select_hero_failure = False
 
     def __init__(self, socket, main_thread):
+        self.discord_id = None
         self.client_socket = socket
         self.main_thread = main_thread
         print("Client Handler is running...")
@@ -67,7 +70,7 @@ class ClientHandler:
         self.run()
 
     def receive_messages(self):
-        while True:
+        while self.socket_thread_running:
             try:
                 message = self.client_socket.recv(1024).decode()
                 print(f'Received message: {message}')
@@ -97,10 +100,11 @@ class ClientHandler:
 
     def run(self):
         # Create a thread to manage socket communication.
+        self.socket_thread_running = True
         socket_listen_thread = Thread(target=self.receive_messages, args=())
         socket_listen_thread.start()
 
-        # Create Queue Watcher.
+    def init_queue_watcher(self):
         self.queue_watcher = QueueWatcher(self)
 
     def activate_reminder(self):
@@ -139,9 +143,9 @@ class ClientHandler:
         if self.reminder:
             self.client_socket.send(b'!remind_user')
 
-    def link_discord_user(self, discord_id):
+    def link_discord_user(self, username):
         try:
-            message = f'!get_connection_authorization {discord_id}'
+            message = f'!get_connection_authorization {username}'
             self.client_socket.send(message.encode())
         except Exception as e:
             print(f'Error - Could not connect discord user to server. {e}')
@@ -151,12 +155,26 @@ class ClientHandler:
             username = message.split(' ')[1]
             self.connected_as = username
             print(f'Connected discord user {self.connected_as} to server.')
-            self.main_thread.switch_to_main_window()
+
+            queue_watcher_thread = Thread(target=self.init_queue_watcher, args=())
+            queue_watcher_thread.start()
+
+            gui_thread = Thread(target=self.main_thread.destroy_gui, args=())
+            gui_thread.start()
+
         except Exception as e:
             print(f'Error connecting to server. Restart and try again please. {e}')
 
     def exit_program(self):
-        pass
+        try:
+            # Terminate socket connection.
+            self.client_socket.send(f'!disconnect {self.discord_id}'.encode())
+            self.socket_thread_running = False
+            self.client_socket.close()
+            self.main_thread.quit()
+            raise SystemExit("Program exited successfully.")
+        except Exception as e:
+            print(f'Error terminating program: {e}')
 
     def exit_game(self):
         game_name = "Overwatch.exe"

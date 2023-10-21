@@ -1,6 +1,7 @@
 import socket
+import sys
 from threading import Thread
-from ClientUI import MainWindow, LoginScreen
+from ClientUI import LoginScreen
 from ClientHandler import ClientHandler
 
 
@@ -29,9 +30,8 @@ class App:
     def get_client_ui(self):
         return self.client
 
-    def switch_to_main_window(self):
-        new_client = self.client.hide()
-        self.client = new_client
+    def destroy_gui(self):
+        self.client.window.destroy()
 
     def start(self):
         # Establish socket connection
@@ -46,6 +46,10 @@ class App:
 
         # Initialize Tkinter
         self.init_client()
+
+    def quit(self):
+        self.client.window.destroy()
+        sys.exit()
 
 
 def main():

@@ -22,7 +22,7 @@ class DiscordBot(discord.Client):
         super().__init__(intents=intents)
         self.server = server
         self.__reminder = False  # To reduce unnecessary communication between client-server, we'll hold this to keep
-        # track of the reminder flag in the server.
+        # track of the reminder flag in the server. todo: this won't work with multiple clients, need to hold a reminder flag for each socket OR getter method from the socket.
 
     async def on_ready(self):
         print(f'Bot is logged in as {self.user.name}')
@@ -50,6 +50,7 @@ class DiscordBot(discord.Client):
                         clients[user_id].send(response)
                         print(f'Received authorization from {user_id}')
                         await message.author.send(f'Connection authorized.')
+                        self.server.remove_awaiting_connection(user_id)
                         print(f'Client connected.')
                         print(f'Active connections: {len(clients)}')
                     except OSError as e:
@@ -127,10 +128,16 @@ class DiscordBot(discord.Client):
         else:
             print('Error - user not found. Make sure to provide the correct user id.')
 
+    async def send_socket_user_id_by_username(self, username):
+        user = discord.utils.get(self.users, name=username)
+        if user is not None:
+            return user.id
+        return None
+
     async def notify_user_game_found(self, user_id):
         user = self.get_user(int(user_id))
         if user:
-            await user.send("A competitive match was found!")
+            await user.send("Your competitive match has been found!")
         else:
             print('Error - user not found. Make sure to provide the correct user id.')
 
