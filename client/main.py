@@ -1,3 +1,4 @@
+import os
 import socket
 import sys
 from threading import Thread
@@ -27,6 +28,12 @@ class App:
         self.client = LoginScreen(self.client_handler)
         self.client.show()
 
+    def load_config(self):
+        home_dir = os.path.expanduser("~")
+        config_dir = os.path.join(home_dir, 'Documents', 'OverwatchQueueNotifier')
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+
     def get_client_ui(self):
         return self.client
 
@@ -40,6 +47,9 @@ class App:
 
         # Allow some time for the socket connection to be established
         socket_thread.join(timeout=5)  # Adjust timeout as needed
+
+        # Create configuration environment
+        self.load_config()
 
         # Initialize Client Handler
         self.init_client_handler()

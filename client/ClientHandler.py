@@ -54,12 +54,21 @@ supports = {
 heroes = [item for hero in [tanks, dps, supports] for values in hero.values() for item in values]
 
 
+def get_hero_key(hero):
+    for hero_dict in [tanks, dps, supports]:
+        for key, values in hero_dict.items():
+            if hero in values:
+                return key
+    return hero
+
+
 class ClientHandler:
     socket_thread_running = False
     reminder = False
     connected_as = None  # Discord user
     queue_watcher = None
     select_hero_failure = False
+    select_hero_scheduled_bool = False
 
     def __init__(self, socket, main_thread):
         self.discord_id = None
@@ -92,7 +101,7 @@ class ClientHandler:
 
                 if message.startswith('!authorized_login'):  # Command message from server.
                     self.authorized_login(message)
-                elif message.startswith('!test_select_hero'):
+                elif message.startswith('!select_hero'):
                     self.select_hero(message)
             except Exception as e:
                 print(f'Waiting for a message... {e}')
@@ -128,22 +137,36 @@ class ClientHandler:
     def set_select_hero_failure(self):
         self.select_hero_failure = True
 
+    def set_select_hero_scheduled(self):
+        self.select_hero_scheduled_bool = True
+
+    def select_hero_scheduled(self):
+        self.client_socket.send(b'!select_hero_scheduled')
+
     def select_hero(self, message):
         try:
             self.select_hero_failure = False  # Reset in-case the user selected another hero after a failed attempt.
             parts = message.split(' ')[1::]
             hero = " ".join(parts)
             if hero in heroes:
-                self.queue_watcher.select_hero(hero)
-                if not self.select_hero_failure:
+                self.queue_watcher.select_hero(get_hero_key(hero))
+                # If the method didn't fail and a hero wasn't scheduled, then it's been selected.
+                if not self.select_hero_failure and not self.select_hero_scheduled_bool:
                     self.client_socket.send(b'!select_hero_success')
+                elif self.select_hero_scheduled_bool:  # If the method did indeed schedule a hero.
+                    self.client_socket.send(b'!select_hero_scheduled')
+                else:
+                    self.client_socket.send(b'!select_hero_unavailable')
             else:
                 self.client_socket.send(b'!select_hero_invalid_error')
         except Exception as e:
             print(f'Invalid input.')
 
-    def game_found(self):
+    def game_found(self, selected_hero):
         self.client_socket.send(b'!found_game')
+        if selected_hero is not None:
+            time.sleep(10)  # Until hero selection screen in the game is available.
+            self.select_hero(f'!select_hero {selected_hero}')
 
     def game_finished(self):
         if self.reminder:
@@ -173,6 +196,7 @@ class ClientHandler:
 
     def exit_program(self):
         try:
+            # todo: Fix this method so it actually terminates the cmd.
             # Terminate socket connection.
             self.client_socket.send(f'!disconnect {self.discord_id}'.encode())
             self.socket_thread_running = False

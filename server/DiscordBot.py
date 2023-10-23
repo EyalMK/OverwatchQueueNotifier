@@ -21,8 +21,6 @@ class DiscordBot(discord.Client):
     def __init__(self, server):
         super().__init__(intents=intents)
         self.server = server
-        self.__reminder = False  # To reduce unnecessary communication between client-server, we'll hold this to keep
-        # track of the reminder flag in the server. todo: this won't work with multiple clients, need to hold a reminder flag for each socket OR getter method from the socket.
 
     async def on_ready(self):
         print(f'Bot is logged in as {self.user.name}')
@@ -47,26 +45,26 @@ class DiscordBot(discord.Client):
                         self.server.add_client(user_id, awaiting_connections[user_id])  # (
                         # discord id, socket connection)
                         response = f'!authorized_login {message.author.global_name}'.encode()
-                        clients[user_id].send(response)
+                        clients[user_id].get_socket().send(response)
                         print(f'Received authorization from {user_id}')
                         await message.author.send(f'Connection authorized.')
                         self.server.remove_awaiting_connection(user_id)
                         print(f'Client connected.')
                         print(f'Active connections: {len(clients)}')
                     except OSError as e:
-                        self.server.remove_client(user_id, awaiting_connections[user_id])
+                        self.server.remove_client(awaiting_connections[user_id])
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
                         print(f'Socket not found. Error: {e}')
             else:
                 await message.author.send(f'Connection failed. Invalid ID.')
 
         if user_id in clients:
-            client_socket = clients[user_id]
+            client_socket = clients[user_id].get_socket()
             if message.content == '!remindme':
                 try:
                     client_socket.send(b'set_reminder_true')
                     await self.reminder_invitation(message.author)
-                    self.__reminder = True
+                    clients[user_id].set_reminder(True)
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
@@ -74,7 +72,7 @@ class DiscordBot(discord.Client):
                 try:
                     client_socket.send(b'set_reminder_false')
                     await self.cancel_reminder_invitation(message.author)
-                    self.__reminder = False
+                    clients[user_id].set_reminder(False)
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
@@ -90,11 +88,11 @@ class DiscordBot(discord.Client):
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
-            elif message.content.startswith('!testselecthero'):
+            elif message.content.startswith('!selecthero'):
                 try:
                     parts = message.content.split(' ')[1::]
                     hero = " ".join(parts)
-                    client_socket.send(f'!test_select_hero {hero}'.encode())
+                    client_socket.send(f'!select_hero {hero}'.encode())
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
@@ -121,56 +119,41 @@ class DiscordBot(discord.Client):
                 if message.content == '!admin-cmd':
                     await self.announce_commands()
 
-    async def send_user_reminder(self, user_id):
+    async def send_user_message(self, user_id, message):
         user = self.get_user(int(user_id))
         if user:
-            await user.send("Reminder - Invite your friend/s :)")
+            await user.send(message)
         else:
             print('Error - user not found. Make sure to provide the correct user id.')
 
-    async def send_socket_user_id_by_username(self, username):
-        user = discord.utils.get(self.users, name=username)
-        if user is not None:
-            return user.id
-        return None
+    async def send_user_reminder(self, user_id):
+        await self.send_user_message(user_id, "Reminder - Invite your friend/s :)")
 
     async def notify_user_game_found(self, user_id):
-        user = self.get_user(int(user_id))
-        if user:
-            await user.send("Your competitive match has been found!")
-        else:
-            print('Error - user not found. Make sure to provide the correct user id.')
+        await self.send_user_message(user_id, "Your competitive match has been found!")
 
     async def inform_user_select_hero_invalid(self, user_id):
-        user = self.get_user(int(user_id))
-        if user:
-            await user.send("The hero you requested does not exist. Invalid input.")
-        else:
-            print('Error - user not found. Make sure to provide the correct user id.')
+        await self.send_user_message(user_id, "The hero you requested does not exist. Invalid input.")
+
+    async def inform_user_select_hero_unavailable(self, user_id):
+        await self.send_user_message(user_id, "The hero you requested is not available. It's either taken or it's not "
+                                              "the role you've"
+                                              "queued for.")
 
     async def inform_user_cancel_queue_failure(self, user_id, errno):
-        user = self.get_user(int(user_id))
-        if user:
-            if errno == '1':
-                await user.send("Cannot cancel queue because you're in a match!")
-            elif errno == '2':
-                await user.send("You're not in queue.")
-        else:
-            print('Error - user not found. Make sure to provide the correct user id.')
+        if errno == '1':
+            await self.send_user_message(user_id, "Cannot cancel queue because you're in a match!")
+        elif errno == '2':
+            await self.send_user_message(user_id, "You're not in queue.")
 
     async def inform_user_cancel_queue_success(self, user_id):
-        user = self.get_user(int(user_id))
-        if user:
-            await user.send("Queue has been cancelled.")
-        else:
-            print('Error - user not found. Make sure to provide the correct user id.')
+        await self.send_user_message(user_id, "Queue has been cancelled.")
 
     async def inform_user_select_hero_success(self, user_id):
-        user = self.get_user(int(user_id))
-        if user:
-            await user.send("Hero has been selected.")
-        else:
-            print('Error - user not found. Make sure to provide the correct user id.')
+        await self.send_user_message(user_id, "Hero has been selected.")
+
+    async def inform_user_select_hero_scheduled(self, user_id):
+        await self.send_user_message(user_id, "Hero has been scheduled for selection when a game is found.")
 
     async def format_commands(self):
         # Format the commands in a message.
@@ -188,26 +171,37 @@ class DiscordBot(discord.Client):
         # Send the formatted commands.
         await channel.send(await self.format_commands())
 
+    async def send_socket_user_id_by_username(self, username):
+        user = discord.utils.get(self.users, name=username)
+        if user is not None:
+            return user.id
+        return None
+
     async def send_commands(self, user):
         # Send the formatted commands.
         await user.send(await self.format_commands())
 
-    async def select_hero(self, user):
-        # Send hero name to client for selection.
-        await user.send('I will select {TEST} hero for you.')
-
     async def reminder_invitation(self, user):
-        # Activate reminder bool in client.
-        # If the reminder bool in client is already activated, send a different message.
-        if self.__reminder:
-            await user.send("Reminder is already set. I will remind you to invite your friend, after your game.")
-        else:
-            await user.send("I will remind you to invite your friend, after your game.")
+        try:
+            # Activate reminder bool in client.
+            # If the reminder bool in client is already activated, send a different message.
+            clients = self.server.get_connected_clients()
+            if clients[str(user.id)].get_reminder():
+                await user.send("Reminder is already set. I will remind you to invite your friend, after your game.")
+            else:
+                await user.send("I will remind you to invite your friend, after your game.")
+        except Exception as e:
+            print(f'Something went wrong with the reminder. {e}')
 
     async def cancel_reminder_invitation(self, user):
-        # Deactivate reminder bool in client.
-        # If the reminder bool in client is not activated, send a different message.
-        if not self.__reminder:
-            await user.send("There are no reminders scheduled.")
-        else:
-            await user.send("Reminder cancelled.")
+        try:
+            # Deactivate reminder bool in client.
+            # If the reminder bool in client is not activated, send a different message.
+            clients = self.server.get_connected_clients()
+            if clients[str(user.id)].get_reminder():
+                clients[str(user.id)].set_reminder(False)
+                await user.send("Reminder cancelled.")
+            else:
+                await user.send("There are no reminders scheduled.")
+        except Exception as e:
+            print(f'Something went wrong with the reminder. {e}')

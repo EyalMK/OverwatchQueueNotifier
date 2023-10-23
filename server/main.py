@@ -6,6 +6,21 @@ import os
 from DiscordBot import DiscordBot
 
 
+class User:
+    def __init__(self, cl_socket):
+        self.__reminder = False
+        self.socket = cl_socket
+
+    def get_socket(self):
+        return self.socket
+
+    def set_reminder(self, reminder: bool):
+        self.__reminder = reminder
+
+    def get_reminder(self):
+        return self.__reminder
+
+
 class App:
     def __init__(self):
         self.discord_bot = None
@@ -51,31 +66,34 @@ class App:
                 print(f'Client disconnected.')
                 print(f'Active connections: {len(self.connected_clients)}')
 
+    def run_async_coroutine_with_discord_bot(self, socket_conn, method):
+        sender_id = self.get_user_id_from_socket(socket_conn)
+        asyncio.run_coroutine_threadsafe(method(sender_id), self.discord_bot.loop)
+
     def handle_command(self, message, socket_conn):
         # Since a thread is handling the socket communication, and the call to send the user a message needs to
         # be asynchronous, we need to run the co-routines in a threadsafe environment.
 
         if message == '!remind_user':
-            sender_id = self.get_user_id_from_socket(socket_conn)
-            asyncio.run_coroutine_threadsafe(self.discord_bot.send_user_reminder(sender_id), self.discord_bot.loop)
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.send_user_reminder)
 
         elif message == '!found_game':
-            sender_id = self.get_user_id_from_socket(socket_conn)
-            asyncio.run_coroutine_threadsafe(self.discord_bot.notify_user_game_found(sender_id), self.discord_bot.loop)
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.notify_user_game_found)
 
         elif message == '!select_hero_invalid_error':
-            sender_id = self.get_user_id_from_socket(socket_conn)
-            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_invalid(sender_id), self.discord_bot.loop)
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_invalid)
+
+        elif message == '!select_hero_unavailable':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_unavailable)
 
         elif message == '!select_hero_success':
-            sender_id = self.get_user_id_from_socket(socket_conn)
-            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_success(sender_id),
-                                             self.discord_bot.loop)
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success)
+
+        elif message == '!select_hero_scheduled':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_scheduled)
 
         elif message == '!queue_cancellation_success':
-            sender_id = self.get_user_id_from_socket(socket_conn)
-            asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_cancel_queue_success(sender_id),
-                                             self.discord_bot.loop)
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_cancel_queue_success)
 
         elif message.startswith('!disconnect'):
             try:
@@ -103,24 +121,22 @@ class App:
                 return
 
             task = asyncio.run_coroutine_threadsafe(self.discord_bot.send_socket_user_id_by_username(username),
-                                             self.discord_bot.loop)
+                                                    self.discord_bot.loop)
             user_id = str(task.result())
             self.awaiting_connections[user_id] = socket_conn
             print(f'Awaiting authorization from {user_id}...')
 
     def get_user_id_from_socket(self, socket_conn):
         try:
-            # O(1) Time and Space complexity.
-            users = list(self.connected_clients.keys())
-            sockets = list(self.connected_clients.values())
-
-            sender_socket = sockets.index(socket_conn)
-            return users[sender_socket]
+            for user_id, user_obj in self.connected_clients.items():
+                if user_obj.socket == socket_conn:
+                    return user_id
+            raise ValueError('User ID not found for this socket connection')
         except Exception as e:
-            print(f'Discord User ID of this connection was not found. Error. {e}')
+            print(f'Discord User ID of this connection was not found. Error: {e}')
 
     def add_client(self, user_id, client_socket):
-        self.connected_clients[user_id] = client_socket
+        self.connected_clients[user_id] = User(client_socket)
 
     def remove_client(self, socket_conn):
         try:
