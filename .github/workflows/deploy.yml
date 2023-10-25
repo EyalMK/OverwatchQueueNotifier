@@ -36,7 +36,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/OverwatchQueueNotifier
-            docker stop overwatchqueuenotifier || true
-            docker rm overwatchqueuenotifier || true
-            docker rmi overwatchqueuenotifier || true
+            docker stop ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
+            docker rm ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
+            docker rmi ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
             docker run -d -p 60650:60650 -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
