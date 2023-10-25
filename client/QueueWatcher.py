@@ -65,6 +65,7 @@ heroes_coordinates_1920x1080 = {
     "Zenyatta": [1660, 890]
 }
 
+game_finished_expected_text = "competitive play competitive play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
 region_resolution_options = {
     "queue_region_big_1920x1080": {
         "x": 750,
@@ -121,21 +122,33 @@ region_resolution_options = {
         "y": 1000,
         "width": 400,
         "height": 40
+    },
+    "enter_game_region_1920x1080": {
+        "x": 780,
+        "y": 505,
+        "width": 320,
+        "height": 50
+    },
+    "comp_cards_region_1920x1080": {
+        "x": 500,
+        "y": 557,
+        "width": 600,
+        "height": 115
     }
 }
 
 
 class QueueWatcher:
     found_game = False
-    active_queue_phases = [False, False, False]
+    queue_cancelled = False
+    active_queue_phases = [False, False, False, False]
     # Phase 0: Find competitive text from screenshot of big region (big box at the beginning of the queue).
     # Phase 1: Find competitive text from screenshot of small region (minimized big box).
     # Phase 2: Find Game Found text from screenshot of queue pop box region.
+    # Phase 3: Find Entering Game text from screenshot of entering game box region. (To avoid false queues)
     monitor_resolution = None  # (Width, Height)
     overwatch_client = None
     selected_hero = None
-
-    # todo: check if already in queue and if so, self.phase1 = self.phase2 = True
 
     def __init__(self, client_handler):
         self.client_handler = client_handler
@@ -150,7 +163,7 @@ class QueueWatcher:
 
         # When Overwatch window is found, make sure the resolution matches the main monitor resolution.
         if self.monitor_resolution != self.get_resolution():
-            pass  # Send error message through Discord and exit program.
+            pass  # todo: Send error message through Discord and exit program.
 
         # Bring Overwatch to the foreground (active window).
         self.set_overwatch_active_window()
@@ -159,6 +172,9 @@ class QueueWatcher:
         # the top middle of the screen, there is a red bar containing the words "Competitive" and a timer
         queue_watcher_thread = Thread(target=self.run_queue_watcher)
         queue_watcher_thread.start()
+
+        queue_detector_thread = Thread(target=self.detect_queue)
+        queue_detector_thread.start()
 
     def set_overwatch_active_window(self):
         try:
@@ -176,10 +192,6 @@ class QueueWatcher:
         root.destroy()
 
         self.monitor_resolution = width, height
-
-    ''' 
-        TESTED
-    '''
 
     def find_overwatch(self):
         # Finds Overwatch window.
@@ -219,7 +231,8 @@ class QueueWatcher:
             if self.capture_region(x, y, width, height, "Competitive"):
                 self.leave_queue(attempt)
                 # Reset all phases
-                self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = False
+                self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
+                    self.active_queue_phases[3] = False
 
                 return True
             return False
@@ -331,6 +344,7 @@ class QueueWatcher:
         image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
 
         # Crop the region by the defined coordinates and save it.
+        # todo: Get coordinates for 2560x1440 and send appropriate coordinates.
         region = image.crop((875, 962, 875 + 170, 962 + 55))
         region.save(os.getcwd() + 'con-bt-scrn.png')
 
@@ -354,7 +368,7 @@ class QueueWatcher:
 
         # If more than a certain percentage of the image is orange,
         # consider it the pressable button
-        return percentage_orange > 50  # You can adjust this threshold as needed
+        return percentage_orange > 50  # 50 Threshold was deemed appropriate, considering some backgrounds are orange and the button is actually transparent...
 
     def select_hero(self, hero):
         self.set_overwatch_active_window()
@@ -426,7 +440,12 @@ class QueueWatcher:
             self.active_queue_phases[phase] = True
             if phase == 1: self.active_queue_phases[0] = True  # If phase 1 is active, then set phase 0 to True as well.
 
-    def detect_current_phase(self):
+        # Actively look if queue has been cancelled (manually by the player), if so, reset all phases.
+        if self.queue_cancelled:
+            self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
+                self.active_queue_phases[3] = False
+
+    def detect_and_set_current_phase(self):
         region_to_capture = self.get_region_dimensions("queue_region_big")
         self.capture_and_set_phase(region_to_capture, 0)
 
@@ -436,10 +455,38 @@ class QueueWatcher:
         region_to_capture = self.get_region_dimensions("queue_region_top_left")
         self.capture_and_set_phase(region_to_capture, 1)
 
+    def detect_queue(self):
+        # We don't want to detect if we're in a queue, if we're in a match.
+        while not self.found_game:
+            result = True
+            # Detect either rectangle, or big box, or rectangle top left. If either exist, we're still in queue.
+            region_to_capture = self.get_region_dimensions("queue_region_big")
+            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                   region_to_capture["height"], "Competitive"):
+                result = False
+
+            region_to_capture = self.get_region_dimensions("queue_region_small")
+            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                   region_to_capture["height"], "Competitive"):
+                result = False
+
+            region_to_capture = self.get_region_dimensions("queue_region_top_left")
+            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                   region_to_capture["height"], "Competitive"):
+                result = False
+
+            self.queue_cancelled = result
+            time.sleep(7)  # We detect if we're not in queue every 7 seconds.
+
+    def is_game_finished(self):
+        # Take screenshots and if we find the competitive cards, we return True.
+        region_to_capture = self.get_region_dimensions("comp_cards_region")
+        return self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"], region_to_capture["height"], game_finished_expected_text)
+
     def run_queue_watcher(self):
         while True:
             # First detect which phase the user is in (assuming the user queued before launching the client).
-            self.detect_current_phase()
+            self.detect_and_set_current_phase()
             while not self.found_game:
                 region_to_capture = self.get_region_dimensions("queue_region_big")
                 while not self.active_queue_phases[0]:
@@ -451,25 +498,43 @@ class QueueWatcher:
                 while not self.active_queue_phases[1] and self.active_queue_phases[0]:
                     print(f'In Phase 2')
                     self.capture_and_set_phase(region_to_capture, 1)
-                    time.sleep(1)
+                    time.sleep(0.5)
 
                 region_to_capture = self.get_region_dimensions("queue_pop_region")
                 while not self.active_queue_phases[2] and self.active_queue_phases[1]:
                     print(f'In Phase 3')
                     self.capture_and_set_phase(region_to_capture, 2, condition="Game Found!")
-                    # Needs to be faster than other phases due to the shorter time window of the game found box.
                     time.sleep(0.5)
 
+                # Detect false queue pop. Find Entering Game, and look for big box, if that exists then false queue -
+                # reset to phase 3.
+                region_to_capture = self.get_region_dimensions("enter_game_region")
+                region_to_check = self.get_region_dimensions("queue_region_big")
+                while not self.active_queue_phases[3] and self.active_queue_phases[2]:
+                    print(f'In Phase 4')
+                    self.capture_and_set_phase(region_to_capture, 3, condition="Entering Game")
+                    if self.capture_region(region_to_check["x"], region_to_check["y"], region_to_check["width"],
+                                           region_to_check["height"], "Competitive"):
+                        self.active_queue_phases[0] = self.active_queue_phases[1] = True
+                        self.active_queue_phases[2] = self.active_queue_phases[3] = False
+                        break
+                    time.sleep(0.25)  # Short window of time to detect this phase.
+
                 # If the phases haven't been reset, and we finished all loops.
-                if self.active_queue_phases[2]:
+                if self.active_queue_phases[3]:
                     print(f'Found game...')
                     self.found_game = True
 
             # Game Found
+            # todo: make this process better. In 5 seconds, we might miss the competitive cards window because of the user.
             self.client_handler.game_found(self.selected_hero)
             while self.found_game:
                 print(f'Checking if game is over...')
-                # Take screenshots and if we find 1) POTG, 2) Menu screen, 3) Stats screen after potg:
-                self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = False
-                self.found_game = False
+                if self.is_game_finished():
+                    self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
+                        self.active_queue_phases[3] = False
+                    self.found_game = False
+                    self.client_handler.game_finished()
+                    self.selected_hero = None
+                    break  # Break to save waiting 5 extra seconds for no reason :)
                 time.sleep(5)

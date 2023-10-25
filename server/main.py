@@ -44,6 +44,7 @@ class App:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind(('127.0.0.1', 1024))
         server_socket.listen(3)
+        print('Server listening on 127.0.0.1:1024')
         while True:
             socket_conn, address = server_socket.accept()
             try:
@@ -165,8 +166,6 @@ def main():
     # Establish socket connection
     socket_thread = Thread(target=socket_listen, args=(server,))
     socket_thread.start()
-
-    print('Server is now listening for connections...')
 
     # Initialize Discord object
     server.init_discord()

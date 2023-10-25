@@ -14,7 +14,7 @@ tanks = {
     "Roadhog": ["Roadhog", "road", "hog", "Hog"],
     "Sigma": ["Sigma", "sigma", "sig", "Sig"],
     "Winston": ["Winston", "winston", "monkey", "winton", "Winton"],
-    "Wrecking Ball": ["Wrecking Ball", "wrecking ball", "Ball", "ball", "hamster", "Hamster"],
+    "Wrecking Ball": ["Wrecking Ball", "wrecking ball", "Ball", "ball", "hamster", "Hamster", "Hammond", "hammond"],
     "Zarya": ["Zarya", "zarya"]
 }
 
@@ -30,7 +30,7 @@ dps = {
     "Pharah": ["Pharah", "pharah", "phara", "Phara"],
     "Reaper": ["Reaper", "reaper", "reap"],
     "Sojourn": ["Sojourn", "sojourn", "Soj", "soj"],
-    "Soldier: 76": ["Soldier: 76", "soldier: 76", "Soldier", "soldier", "sold", "Sold"],
+    "Soldier: 76": ["Soldier: 76", "soldier: 76", "Soldier", "soldier", "sold", "Sold", "legs", "Legs"],
     "Sombra": ["Sombra", "sombra", "somb"],
     "Symmetra": ["Symmetra", "symmetra", "sym", "Symetra", "symetra"],
     "Torbjorn": ["Torbjorn", "torbjorn", "Torb", "torb"],
@@ -62,6 +62,15 @@ def get_hero_key(hero):
     return hero
 
 
+def exit_game():
+    game_name = "Overwatch.exe"
+    for process in psutil.process_iter(['pid', 'name']):
+        if process.info['name'] == game_name:
+            print(f"Terminating {process.info['name']} (PID: {process.info['pid']})")
+            process.terminate()
+            return
+
+
 class ClientHandler:
     socket_thread_running = False
     reminder = False
@@ -87,14 +96,12 @@ class ClientHandler:
                     self.activate_reminder()
                 elif message == 'set_reminder_false':
                     self.deactivate_reminder()
-                elif message == 'test_game_finished':
-                    self.game_finished()
                 elif message == 'cancel_queue':
                     self.cancel_queue()
                 elif message == 'exit':
                     self.exit_program()
                 elif message == 'exit_game':
-                    self.exit_game()
+                    exit_game()
                 elif message == '$user_id_not_found' or message == '$user_already_logged_in':  # Error messages from
                     # server.
                     self.exit_program()
@@ -160,7 +167,7 @@ class ClientHandler:
             else:
                 self.client_socket.send(b'!select_hero_invalid_error')
         except Exception as e:
-            print(f'Invalid input.')
+            print(f'Invalid input. {e}')
 
     def game_found(self, selected_hero):
         self.client_socket.send(b'!found_game')
@@ -171,6 +178,9 @@ class ClientHandler:
     def game_finished(self):
         if self.reminder:
             self.client_socket.send(b'!remind_user')
+            self.reminder = False  # Reset
+
+        self.select_hero_scheduled_bool = False  # Reset
 
     def link_discord_user(self, username):
         try:
@@ -201,15 +211,6 @@ class ClientHandler:
             self.client_socket.send(f'!disconnect {self.discord_id}'.encode())
             self.socket_thread_running = False
             self.client_socket.close()
-            self.main_thread.quit()
             raise SystemExit("Program exited successfully.")
         except Exception as e:
             print(f'Error terminating program: {e}')
-
-    def exit_game(self):
-        game_name = "Overwatch.exe"
-        for process in psutil.process_iter(['pid', 'name']):
-            if process.info['name'] == game_name:
-                print(f"Terminating {process.info['name']} (PID: {process.info['pid']})")
-                process.terminate()
-                return
