@@ -14,9 +14,10 @@ class App:
 
     def socket_connection(self):
         try:
+            ip_address, port = '217.160.99.85', 60650
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect(('127.0.0.1', 1024))
-            print('Client has connected to server. Awaiting Discord Username...')
+            self.client_socket.connect((ip_address, port))
+            print(f'Client has connected to server @ {ip_address}:{port}. Awaiting Discord Authorization...')
         except ConnectionRefusedError:
             print('Connection refused.')
 

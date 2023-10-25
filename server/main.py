@@ -41,10 +41,11 @@ class App:
         return self.awaiting_connections
 
     def socket_connection(self):
+        ip_address, port = '217.160.99.85', 60650
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind(('127.0.0.1', 1024))
+        server_socket.bind((ip_address, port))
         server_socket.listen(3)
-        print('Server listening on 127.0.0.1:1024')
+        print(f'Server listening on {ip_address}:{port}')
         while True:
             socket_conn, address = server_socket.accept()
             try:
