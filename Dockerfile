@@ -12,4 +12,4 @@ COPY server/ ./
 
 EXPOSE 60650
 
-CMD ["python", "/server/main.py"]
+CMD ["python3", "/server/main.py"]
