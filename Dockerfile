@@ -1,10 +1,10 @@
 FROM python:3.9
 
-RUN mkdir /home/OverwatchQueueNotifier/server
+RUN mkdir "/server"
 
-WORKDIR /home/OverwatchQueueNotifier/server
+WORKDIR "/server"
 
-COPY requirements.txt /home/OverwatchQueueNotifier/server
+COPY requirements.txt /server
 
 RUN pip install --no-cache-dir -r requirements.txt
 
