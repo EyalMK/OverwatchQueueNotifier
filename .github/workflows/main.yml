@@ -28,7 +28,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
 
       - name: SSH into VPS and Pull Latest Docker Image
-        uses: appleboy/ssh-action@v2
+        uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
