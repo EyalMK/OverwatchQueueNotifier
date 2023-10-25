@@ -39,4 +39,4 @@ jobs:
             docker stop overwatchqueuenotifier || true
             docker rm overwatchqueuenotifier || true
             docker rmi overwatchqueuenotifier || true
-            docker run -d -p 60650:60650 -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_IDSc }} overwatchqueuenotifier:latest
+            docker run -d -p 60650:60650 -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_IDSc }} ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
