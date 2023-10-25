@@ -37,4 +37,4 @@ jobs:
           script: |
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
             docker pull ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
-            docker run -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} overwatchqueuenotifier:latest
+            docker run -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
