@@ -41,7 +41,7 @@ class App:
         return self.awaiting_connections
 
     def socket_connection(self):
-        ip_address, port = '', 60650
+        ip_address, port = '0.0.0.0', 60650
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((ip_address, port))
         server_socket.listen(3)
