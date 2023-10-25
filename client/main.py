@@ -1,6 +1,7 @@
 import os
 import socket
 import sys
+import keepalive
 from threading import Thread
 from ClientUI import LoginScreen
 from ClientHandler import ClientHandler
@@ -17,6 +18,7 @@ class App:
             ip_address, port = '217.160.99.85', 60650
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect((ip_address, port))
+            keepalive.set(self.client_socket)  # After 60 seconds of idleness, send a keepalive packet to the server to avoid forced connection closing from the server.
             print(f'Client has connected to server @ {ip_address}:{port}. Awaiting Discord Authorization...')
         except ConnectionRefusedError:
             print('Connection refused.')

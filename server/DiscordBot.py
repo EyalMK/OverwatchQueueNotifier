@@ -13,7 +13,6 @@ cmds = ["[+] !selecthero {HeroName} - To select a hero as soon as a game is foun
         "[+] !cancelreminder - Cancels the scheduled reminder, if one was planned.\n\n",
         "[+] !cancelqueue - Cancels your Overwatch queue.\n\n",
         "[+] !exitgame - Terminates your active Overwatch game client.\n\n",
-        "[+] !exit - Terminates your active Overwatch Queue Notifier client.\n\n",
         ]
 
 
@@ -56,7 +55,7 @@ class DiscordBot(discord.Client):
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
                         print(f'Socket not found. Error: {e}')
             else:
-                await message.author.send(f'Connection failed. Invalid ID.')
+                await message.author.send(f'Connection failed. No valid connection requested.')
 
         if user_id in clients:
             client_socket = clients[user_id].get_socket()
@@ -87,12 +86,6 @@ class DiscordBot(discord.Client):
                     parts = message.content.split(' ')[1::]
                     hero = " ".join(parts)
                     client_socket.send(f'!select_hero {hero}'.encode())
-                except Exception as e:
-                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
-
-            elif message.content == '!exit':
-                try:
-                    client_socket.send(b'exit')
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
@@ -148,6 +141,11 @@ class DiscordBot(discord.Client):
 
     async def inform_user_select_hero_scheduled(self, user_id):
         await self.send_user_message(user_id, "Hero has been scheduled for selection when a game is found.")
+
+    async def inform_user_resolution_error(self, user_id):
+        await self.send_user_message(user_id, "Your monitor's resolution does not match the specified Overwatch "
+                                              "client resolution. This version currently does not support this "
+                                              "feature.")
 
     async def format_commands(self):
         # Format the commands in a message.

@@ -163,7 +163,8 @@ class QueueWatcher:
 
         # When Overwatch window is found, make sure the resolution matches the main monitor resolution.
         if self.monitor_resolution != self.get_resolution():
-            pass  # todo: Send error message through Discord and exit program.
+            self.client_handler.resolutions_not_matching()
+            self.client_handler.exit_program()
 
         # Bring Overwatch to the foreground (active window).
         self.set_overwatch_active_window()
@@ -178,8 +179,11 @@ class QueueWatcher:
 
     def set_overwatch_active_window(self):
         try:
-            win32gui.ShowWindow(self.overwatch_client, win32con.SW_SHOW)
-            win32gui.SetForegroundWindow(self.overwatch_client)
+            if self.overwatch_client is not None:
+                win32gui.ShowWindow(self.overwatch_client, win32con.SW_SHOW)
+                win32gui.SetForegroundWindow(self.overwatch_client)
+            else:
+                print(f'Could not set Overwatch as active window because it was not found.')
         except Exception as e:
             print(f'Error setting Overwatch as active window. {e}')
 
@@ -201,18 +205,20 @@ class QueueWatcher:
                 print(f'Found overwatch...')
                 return hwnd
             print(f'Looking for Overwatch...')
-            time.sleep(0.5)  # Look every half a second... Takes a lot of time to launch and connect to Overwatch on
-            # average anyway.
+            time.sleep(1)
 
     def get_resolution(self):
-        home_dir = os.path.expanduser("~")
-        config_path = os.path.join(home_dir, 'Documents', 'Overwatch', 'Settings', 'Settings_v0.ini')
+        try:
+            home_dir = os.path.expanduser("~")
+            config_path = os.path.join(home_dir, 'Documents', 'Overwatch', 'Settings', 'Settings_v0.ini')
 
-        config = configparser.ConfigParser()
-        config.read(config_path)
+            config = configparser.ConfigParser()
+            config.read(config_path)
 
-        return int(config['Render.13']['FullScreenWidth'].split('"')[1]), int(
-            config['Render.13']['FullScreenHeight'].split('"')[1])
+            return int(config['Render.13']['FullScreenWidth'].split('"')[1]), int(
+                config['Render.13']['FullScreenHeight'].split('"')[1])
+        except Exception as e:
+            print(f'Error retrieving Overwatch resolution: {e}')
 
     def get_region_dimensions(self, region):
         res_w, res_h = self.get_resolution()
@@ -340,35 +346,38 @@ class QueueWatcher:
 
     def check_available_selection(self):
         # Take screenshot of region of the "Continue" Button.
-        left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
-        image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
+        if self.overwatch_client is not None:
+            left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
+            image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
 
-        # Crop the region by the defined coordinates and save it.
-        # todo: Get coordinates for 2560x1440 and send appropriate coordinates.
-        region = image.crop((875, 962, 875 + 170, 962 + 55))
-        region.save(os.getcwd() + 'con-bt-scrn.png')
+            # Crop the region by the defined coordinates and save it.
+            # todo: Get coordinates for 2560x1440 and send appropriate coordinates.
+            region = image.crop((875, 962, 875 + 170, 962 + 55))
+            region.save(os.getcwd() + 'con-bt-scrn.png')
 
-        # Load the image using OpenCV
-        image = cv2.imread(os.getcwd() + 'con-bt-scrn.png')
+            # Load the image using OpenCV
+            image = cv2.imread(os.getcwd() + 'con-bt-scrn.png')
 
-        # Convert the image to the HSV color space
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            # Convert the image to the HSV color space
+            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        # Define the range for orange color in HSV
-        lower_orange = np.array([5, 50, 50])
-        upper_orange = np.array([15, 255, 255])
+            # Define the range for orange color in HSV
+            lower_orange = np.array([5, 50, 50])
+            upper_orange = np.array([15, 255, 255])
 
-        # Create a mask for the orange color
-        mask = cv2.inRange(hsv, lower_orange, upper_orange)
+            # Create a mask for the orange color
+            mask = cv2.inRange(hsv, lower_orange, upper_orange)
 
-        # Calculate the percentage of orange pixels
-        total_pixels = image.shape[0] * image.shape[1]
-        orange_pixels = np.sum(mask > 0)
-        percentage_orange = (orange_pixels / total_pixels) * 100
+            # Calculate the percentage of orange pixels
+            total_pixels = image.shape[0] * image.shape[1]
+            orange_pixels = np.sum(mask > 0)
+            percentage_orange = (orange_pixels / total_pixels) * 100
 
-        # If more than a certain percentage of the image is orange,
-        # consider it the pressable button
-        return percentage_orange > 50  # 50 Threshold was deemed appropriate, considering some backgrounds are orange and the button is actually transparent...
+            # If more than a certain percentage of the image is orange,
+            # consider it the pressable button
+            return percentage_orange > 50  # 50 Threshold was deemed appropriate, considering some backgrounds are
+            # orange and the button is actually transparent...
+        return False  # Overwatch isn't running...
 
     def select_hero(self, hero):
         self.set_overwatch_active_window()
@@ -427,13 +436,15 @@ class QueueWatcher:
         return expected_text.lower() in extracted_text.lower()
 
     def capture_region(self, x, y, width, height, expected_test):
-        left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
-        image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
+        if self.overwatch_client is not None:
+            left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
+            image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
 
-        # Crop the region by the defined coordinates
-        region = image.crop((x, y, x + width, y + height))
+            # Crop the region by the defined coordinates
+            region = image.crop((x, y, x + width, y + height))
 
-        return self.check_text(region, expected_test)
+            return self.check_text(region, expected_test)
+        return False  # Overwatch isn't running...
 
     def capture_and_set_phase(self, region, phase, condition="Competitive"):
         if self.capture_region(region["x"], region["y"], region["width"], region["height"], condition):
