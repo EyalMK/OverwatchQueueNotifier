@@ -16,6 +16,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
+      - name: Stop and Remove Existing Container
+        run: |
+          docker stop ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
+          docker rm ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
+
+      - name: Remove Existing Image (if exists)
+        run: docker rmi ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
+
       - name: Build Docker Image
         run: docker buildx build --platform linux/amd64 -t overwatchqueuenotifier --build-arg DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} --build-arg DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} .
 
@@ -28,7 +36,7 @@ jobs:
           source: .
           target: /root/OverwatchQueueNotifier
 
-      - name: SSH into VPS
+      - name: SSH into VPS and Start Docker Container
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -36,7 +44,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/OverwatchQueueNotifier
-            docker stop ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
-            docker rm ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
-            docker rmi ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier || true
             docker run -d -p 60650:60650 -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
