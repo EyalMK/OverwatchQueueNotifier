@@ -76,12 +76,6 @@ class DiscordBot(discord.Client):
                 except Exception as e:
                     await message.author.send(f'Error communicating with client, make sure client is running. {e}')
 
-            elif message.content == '!testgamefinished':
-                try:
-                    client_socket.send(b'test_game_finished')
-                except Exception as e:
-                    await message.author.send(f'Error communicating with client, make sure client is running. {e}')
-
             elif message.content == '!cancelqueue':
                 try:
                     client_socket.send(b'cancel_queue')
