@@ -69,13 +69,13 @@ class App:
                 print(f'Active connections: {len(self.connected_clients)}')
 
     def run_async_coroutine_with_discord_bot(self, socket_conn, method):
+        # Since a thread is handling the socket communication, and the call to send the user a message needs to
+        # be asynchronous, we need to run the co-routines in a threadsafe environment.
+
         sender_id = self.get_user_id_from_socket(socket_conn)
         asyncio.run_coroutine_threadsafe(method(sender_id), self.discord_bot.loop)
 
     def handle_command(self, message, socket_conn):
-        # Since a thread is handling the socket communication, and the call to send the user a message needs to
-        # be asynchronous, we need to run the co-routines in a threadsafe environment.
-
         if message == '!remind_user':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.send_user_reminder)
 
