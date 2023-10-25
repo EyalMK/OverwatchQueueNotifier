@@ -1,5 +1,7 @@
 import configparser
 import tkinter as tk
+from dotenv import load_dotenv
+import webbrowser
 from tkinter import ttk
 import os
 import sys
@@ -80,16 +82,23 @@ class LoginScreen:
                                   f'the Discord server. {e}')
 
     def on_hover(self, event):
-        self.link_button.config(bg='#357ABD', fg='white')  # Darker blue on hover
+        event.widget.config(bg='#357ABD', fg='white')  # Darker blue on hover
 
     def on_leave(self, event):
-        self.link_button.config(bg='#4287f5', fg='white')  # Blue button
+        event.widget.config(bg='#4287f5', fg='white')  # Blue button
+
+    def open_discord_invite(self):
+        # Read DISCORD_INVITATION_LINK from .env file
+        load_dotenv()
+
+        # Open the link in the default web browser
+        webbrowser.open(os.getenv('DISCORD_INVITATION_LINK'))
 
     def build_popup_ui(self):
         self.window.title('Overwatch Queue Notifier - Discord Bot Edition')
         path = favicon_path
         self.window.iconbitmap(path)
-        self.window.geometry('800x350')
+        self.window.geometry('900x450')
         self.window.configure(bg='#F4F4F4')  # Light gray background
 
         rdy_label = tk.Label(self.window,
@@ -98,6 +107,24 @@ class LoginScreen:
                              bg='#F4F4F4',  # Light gray background
                              fg='#333333')  # Dark text
         rdy_label.pack(pady=(20, 0))
+
+        join_discord_text = tk.Label(self.window,
+                                     text="Join our Discord server to unlock access to the Discord bot:",
+                                     font=('Arial', 12),
+                                     bg='#F4F4F4',
+                                     fg='#333333')
+        join_discord_text.pack(pady=(20, 0))
+
+        join_discord_button = tk.Button(self.window, text="Join Discord Server",
+                                        command=self.open_discord_invite,
+                                        bg='#4287f5',
+                                        fg='white',
+                                        font=('Arial', 12),
+                                        padx=20, pady=5,
+                                        bd=0,
+                                        activebackground='#3c77c8',
+                                        activeforeground='#ffffff')
+        join_discord_button.pack(pady=(5, 20))
 
         instruction_label = tk.Label(self.window,
                                      text="Please enter your official Discord username ",
@@ -136,8 +163,11 @@ class LoginScreen:
 
         self.link_button.pack(pady=(0, 5))  # Align to the left with some padding
 
-        self.link_button.bind("<Enter>", self.on_hover)  # Hover effect
+        # Hover Effects
+        self.link_button.bind("<Enter>", self.on_hover)
         self.link_button.bind("<Leave>", self.on_leave)
+        join_discord_button.bind("<Enter>", self.on_hover)
+        join_discord_button.bind("<Leave>", self.on_leave)
 
     def show(self):
         self.window.mainloop()
