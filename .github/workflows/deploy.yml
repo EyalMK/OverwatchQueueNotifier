@@ -36,7 +36,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/OverwatchQueueNotifier
-            docker stop overwatch-queue-notifier || true
-            docker rm overwatch-queue-notifier || true
-            docker rmi overwatch-queue-notifier || true
+            docker stop overwatchqueuenotifier || true
+            docker rm overwatchqueuenotifier || true
+            docker rmi overwatchqueuenotifier || true
             docker-compose up -d
