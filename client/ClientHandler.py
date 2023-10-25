@@ -98,8 +98,6 @@ class ClientHandler:
                     self.deactivate_reminder()
                 elif message == 'cancel_queue':
                     self.cancel_queue()
-                elif message == 'exit':
-                    self.exit_program()
                 elif message == 'exit_game':
                     exit_game()
                 elif message == '$user_id_not_found' or message == '$user_already_logged_in':  # Error messages from
@@ -149,6 +147,9 @@ class ClientHandler:
 
     def select_hero_scheduled(self):
         self.client_socket.send(b'!select_hero_scheduled')
+
+    def resolutions_not_matching(self):
+        self.client_socket.send(b'!not_matching_resolution_error')
 
     def select_hero(self, message):
         try:

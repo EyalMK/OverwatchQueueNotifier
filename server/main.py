@@ -97,6 +97,9 @@ class App:
         elif message == '!queue_cancellation_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_cancel_queue_success)
 
+        elif message == '!not_matching_resolution_error':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_resolution_error)
+
         elif message.startswith('!disconnect'):
             try:
                 discord_id = message.split(' ')[1]

@@ -1,6 +1,5 @@
 import configparser
 import tkinter as tk
-from dotenv import load_dotenv
 import webbrowser
 from tkinter import ttk
 import os
@@ -88,11 +87,8 @@ class LoginScreen:
         event.widget.config(bg='#4287f5', fg='white')  # Blue button
 
     def open_discord_invite(self):
-        # Read DISCORD_INVITATION_LINK from .env file
-        load_dotenv()
-
         # Open the link in the default web browser
-        webbrowser.open(os.getenv('DISCORD_INVITATION_LINK'))
+        webbrowser.open('https://discord.gg/nzgwsvtzXW')
 
     def build_popup_ui(self):
         self.window.title('Overwatch Queue Notifier - Discord Bot Edition')
