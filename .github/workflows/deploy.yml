@@ -17,7 +17,7 @@ jobs:
         uses: docker/setup-buildx-action@v1
 
       - name: Build Docker Image
-        run: docker buildx build --platform linux/amd64 -t overwatch-queue-notifier --build-arg DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} --build-arg DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} .
+        run: docker buildx build --platform linux/amd64 -t overwatchqueuenotifier --build-arg DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} --build-arg DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} .
 
       - name: Copy Docker Image to VPS
         uses: appleboy/scp-action@master
@@ -39,4 +39,4 @@ jobs:
             docker stop overwatchqueuenotifier || true
             docker rm overwatchqueuenotifier || true
             docker rmi overwatchqueuenotifier || true
-            docker-compose up -d
+            docker run -d -p 60650:60650 -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_IDSc }} overwatchqueuenotifier:latest
