@@ -33,4 +33,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
-          script: docker pull ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
+          port: 22
+          script: |
+            docker stop overwatchqueuenotifier && docker rm overwatchqueuenotifier
+            docker pull ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest
+            docker run -e DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} -e DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} overwatchqueuenotifier:latest
