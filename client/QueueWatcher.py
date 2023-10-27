@@ -236,6 +236,7 @@ class QueueWatcher:
     # Phase 0: Find Game Found text from screenshot of queue pop box region.
     # Phase 1: Find Entering Game text from screenshot of entering game box region. (To avoid false queues)
     monitor_resolution = None  # (Width, Height)
+    overwatch_resolution = None  # (Width, Height)
     overwatch_client = None
     selected_hero = None
 
@@ -251,7 +252,9 @@ class QueueWatcher:
         self.overwatch_client = self.find_overwatch()
 
         # When Overwatch window is found, make sure the resolution matches the main monitor resolution.
-        if self.monitor_resolution != self.get_resolution():
+        self.get_resolution()
+        if self.monitor_resolution != self.overwatch_resolution:
+            print(f'Terminating program... Resolutions are not matching.')
             self.client_handler.resolutions_not_matching()
             self.client_handler.exit_program()
 
@@ -269,7 +272,7 @@ class QueueWatcher:
     def set_overwatch_active_window(self):
         try:
             if self.overwatch_client is not None:
-                win32gui.ShowWindow(self.overwatch_client, win32con.SW_SHOW)
+                win32gui.ShowWindow(self.overwatch_client, win32con.SW_RESTORE)
                 win32gui.SetForegroundWindow(self.overwatch_client)
             else:
                 print(f'Could not set Overwatch as active window because it was not found.')
@@ -298,15 +301,12 @@ class QueueWatcher:
 
     def get_resolution(self):
         if self.overwatch_client is not None:
+            self.set_overwatch_active_window()
             rect = win32gui.GetClientRect(self.overwatch_client)
-            width = rect[2] - rect[0]
-            height = rect[3] - rect[1]
-            return width, height
-        return 0, 0  # It'll basically cause the check to fail.
+            self.overwatch_resolution = (rect[2] - rect[0], rect[3] - rect[1])
 
     def get_region_dimensions(self, region):
-        res_w, res_h = self.get_resolution()
-        return region_resolution_options[region + f'_{res_w}x{res_h}']
+        return region_resolution_options[region + f'_{self.overwatch_resolution[0]}x{self.overwatch_resolution[1]}']
 
     def cancel_queue(self):
         if self.found_game:
