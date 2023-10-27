@@ -1,5 +1,7 @@
 import asyncio
 import socket
+import sys
+
 from dotenv import load_dotenv
 from threading import Thread
 import os
@@ -41,7 +43,9 @@ class App:
         return self.awaiting_connections
 
     def socket_connection(self):
-        ip_address, port = '0.0.0.0', 60650
+        # When running dev-env, environment variables SERVER_IP/PORT will be available.
+        ip_address = os.getenv('SERVER_IP', '0.0.0.0')
+        port = int(os.getenv('SERVER_PORT', 1024))
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((ip_address, port))
         server_socket.listen()
@@ -163,6 +167,12 @@ def socket_listen(app):
 def main():
     # Load .env
     load_dotenv()
+
+    if len(sys.argv) > 1:
+        environment = sys.argv[1]
+        if environment == 'dev':
+            os.environ['SERVER_IP'] = '127.0.0.1'
+            os.environ['SERVER_PORT'] = '1024'
 
     # Initialize App object
     server = App()

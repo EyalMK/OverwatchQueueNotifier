@@ -117,14 +117,14 @@ class DiscordBot(discord.Client):
         await self.send_user_message(user_id, "Reminder - Invite your friend/s :)")
 
     async def notify_user_game_found(self, user_id):
-        await self.send_user_message(user_id, "Your competitive match has been found!")
+        await self.send_user_message(user_id, "Your match has been found!")
 
     async def inform_user_select_hero_invalid(self, user_id):
         await self.send_user_message(user_id, "The hero you requested does not exist. Invalid input.")
 
     async def inform_user_select_hero_unavailable(self, user_id):
         await self.send_user_message(user_id, "The hero you requested is not available. It's either taken or it's not "
-                                              "the role you've"
+                                              "the role you've "
                                               "queued for.")
 
     async def inform_user_cancel_queue_failure(self, user_id, errno):
