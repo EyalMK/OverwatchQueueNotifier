@@ -15,10 +15,13 @@ class App:
 
     def socket_connection(self):
         try:
-            ip_address, port = '217.160.99.85', 60650
+            # When running dev-env, environment variables SERVER_IP/PORT will be available.
+            ip_address = os.getenv('SERVER_IP', '217.160.99.85')
+            port = int(os.getenv('SERVER_PORT', 60650))
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect((ip_address, port))
-            keepalive.set(self.client_socket)  # After 60 seconds of idleness, send a keepalive packet to the server to avoid forced connection closing from the server.
+            keepalive.set(self.client_socket)  # After 60 seconds of idleness, send a keepalive packet to the server
+            # to avoid forced connection closing from the server.
             print(f'Client has connected to server @ {ip_address}:{port}. Awaiting Discord Authorization...')
         except ConnectionRefusedError:
             print('Connection refused.')
@@ -66,6 +69,12 @@ class App:
 
 
 def main():
+    if len(sys.argv) > 1:
+        environment = sys.argv[1]
+        if environment == 'dev':
+            os.environ['SERVER_IP'] = '127.0.0.1'
+            os.environ['SERVER_PORT'] = '1024'
+
     # Initialize App Object
     client = App()
 

@@ -65,13 +65,21 @@ heroes_coordinates_1920x1080 = {
     "Zenyatta": [1660, 890]
 }
 
-game_finished_expected_text = "competitive play competitive play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
+comp_cards_expected_text = "competitive play competitive play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
+quick_cards_expected_text = "quick play quick play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
+
 region_resolution_options = {
     "queue_region_big_1920x1080": {
         "x": 750,
         "y": 0,
         "width": 425,
         "height": 139
+    },
+    "queue_region_big_2560x1440": {
+        "x": 998,
+        "y": 0,
+        "width": 566,
+        "height": 186
     },
 
     "queue_region_small_1920x1080": {
@@ -80,48 +88,83 @@ region_resolution_options = {
         "width": 425,
         "height": 40
     },
-
+    "queue_region_small_2560x1440": {
+        "x": 998,
+        "y": 0,
+        "width": 566,
+        "height": 53
+    },
     "queue_region_top_left_1920x1080": {
         "x": 100,
         "y": 20,
         "width": 200,
         "height": 40
     },
-
+    "queue_region_top_left_2560x1440": {
+        "x": 133.33,
+        "y": 26.67,
+        "width": 266.67,
+        "height": 53.33
+    },
     "queue_pop_region_1920x1080": {
         "x": 770,
         "y": 0,
         "width": 375,
         "height": 100
     },
-
+    "queue_pop_region_2560x1440": {
+        "x": 1024,
+        "y": 0,
+        "width": 500,
+        "height": 133.33
+    },
     "menu_region_1920x1080": {
         "x": 850,
         "y": 0,
         "width": 200,
         "height": 500
     },
-
+    "menu_region_2560x1440": {
+        "x": 1133.33,
+        "y": 0,
+        "width": 266.67,
+        "height": 666.67
+    },
     "full_menu_region_1920x1080": {
         "x": 870,
         "y": 150,
         "width": 320,
         "height": 800
     },
-
+    "full_menu_region_2560x1440": {
+        "x": 1168,
+        "y": 200,
+        "width": 373.33,
+        "height": 1066.67
+    },
     "hero_change_button_region_1920x1080": {
         "x": 850,
         "y": 950,
         "width": 250,
         "height": 75
     },
-
-    # Hero selection screen exclusive text
+    "hero_change_button_region_2560x1440": {
+        "x": 1133.33,
+        "y": 1066.67,
+        "width": 333.33,
+        "height": 100
+    },
     "hero_select_details_region_1920x1080": {
         "x": 20,
         "y": 1000,
         "width": 400,
         "height": 40
+    },
+    "hero_select_details_region_2560x1440": {
+        "x": 30.67,
+        "y": 1133.33,
+        "width": 533.33,
+        "height": 53.33
     },
     "enter_game_region_1920x1080": {
         "x": 780,
@@ -129,11 +172,59 @@ region_resolution_options = {
         "width": 320,
         "height": 50
     },
-    "comp_cards_region_1920x1080": {
+    "enter_game_region_2560x1440": {
+        "x": 936.67,
+        "y": 606.67,
+        "width": 426.67,
+        "height": 66.67
+    },
+    "queue_cards_region_1920x1080": {
         "x": 500,
         "y": 557,
         "width": 600,
         "height": 115
+    },
+    "queue_cards_region_2560x1440": {
+        "x": 833.33,
+        "y": 834.67,
+        "width": 1000,
+        "height": 191.67
+    },
+    "potm_title_region_1920x1080": {
+        "x": 40,
+        "y": 20,
+        "width": 280,
+        "height": 65
+    },
+    "potm_title_region_2560x1440": {
+        "x": 53.33,
+        "y": 26.67,
+        "width": 373.33,
+        "height": 88.89
+    },
+    "progression_screen_title_region_1920x1080": {
+        "x": 1540,
+        "y": 100,
+        "width": 250,
+        "height": 25
+    },
+    "progression_screen_title_region_2560x1440": {
+        "x": 1920,
+        "y": 133.33,
+        "width": 333.33,
+        "height": 37.04
+    },
+    "comp_progress_cards_region_1920x1080": {
+        "x": 700,
+        "y": 150,
+        "width": 550,
+        "height": 75
+    },
+    "comp_progress_cards_region_2560x1440": {
+        "x": 853.33,
+        "y": 300,
+        "width": 733.33,
+        "height": 111.11
     }
 }
 
@@ -141,11 +232,9 @@ region_resolution_options = {
 class QueueWatcher:
     found_game = False
     queue_cancelled = False
-    active_queue_phases = [False, False, False, False]
-    # Phase 0: Find competitive text from screenshot of big region (big box at the beginning of the queue).
-    # Phase 1: Find competitive text from screenshot of small region (minimized big box).
-    # Phase 2: Find Game Found text from screenshot of queue pop box region.
-    # Phase 3: Find Entering Game text from screenshot of entering game box region. (To avoid false queues)
+    active_queue_phases = [False, False]
+    # Phase 0: Find Game Found text from screenshot of queue pop box region.
+    # Phase 1: Find Entering Game text from screenshot of entering game box region. (To avoid false queues)
     monitor_resolution = None  # (Width, Height)
     overwatch_client = None
     selected_hero = None
@@ -237,8 +326,7 @@ class QueueWatcher:
             if self.capture_region(x, y, width, height, "Competitive"):
                 self.leave_queue(attempt)
                 # Reset all phases
-                self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
-                    self.active_queue_phases[3] = False
+                self.active_queue_phases[0] = self.active_queue_phases[1] = False
 
                 return True
             return False
@@ -423,19 +511,27 @@ class QueueWatcher:
             if self.check_available_selection():
                 pyautogui.click()
             else:
-                self.selected_hero = None
+                self.client_handler.reset_select_hero_scheduled()
                 self.client_handler.set_select_hero_failure()
+                self.selected_hero = None
         else:  # Not in a game. Schedule for it to be selected later through run_queue_watcher().
             self.selected_hero = hero
             self.client_handler.set_select_hero_scheduled()
 
-    def check_text(self, image, expected_text):
+    def check_text(self, image, expected_text, check_all_types):
         # Returns True if expected_text is found in the provided image.
         gray_image = image.convert('L')
         extracted_text = pytesseract.image_to_string(gray_image)
+
+        # If we requested to check all type of matches, we opt for this block check.
+        if check_all_types:
+            formatted_text = extracted_text.lower()
+            result = "Quick Play".lower() in formatted_text or "Competitive".lower() in formatted_text
+            return result
+
         return expected_text.lower() in extracted_text.lower()
 
-    def capture_region(self, x, y, width, height, expected_test):
+    def capture_region(self, x, y, width, height, expected_text, check_all_types=False):
         if self.overwatch_client is not None:
             left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
             image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
@@ -443,7 +539,7 @@ class QueueWatcher:
             # Crop the region by the defined coordinates
             region = image.crop((x, y, x + width, y + height))
 
-            return self.check_text(region, expected_test)
+            return self.check_text(region, expected_text, check_all_types)
         return False  # Overwatch isn't running...
 
     def capture_and_set_phase(self, region, phase, condition="Competitive"):
@@ -453,8 +549,7 @@ class QueueWatcher:
 
         # Actively look if queue has been cancelled (manually by the player), if so, reset all phases.
         if self.queue_cancelled:
-            self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
-                self.active_queue_phases[3] = False
+            self.active_queue_phases[0] = self.active_queue_phases[1] = False
 
     def detect_and_set_current_phase(self):
         region_to_capture = self.get_region_dimensions("queue_region_big")
@@ -467,85 +562,109 @@ class QueueWatcher:
         self.capture_and_set_phase(region_to_capture, 1)
 
     def detect_queue(self):
-        # We don't want to detect if we're in a queue, if we're in a match.
+        # We don't want to detect if we're in a queue, in a match.
         while not self.found_game:
             result = True
             # Detect either rectangle, or big box, or rectangle top left. If either exist, we're still in queue.
             region_to_capture = self.get_region_dimensions("queue_region_big")
             if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive"):
+                                   region_to_capture["height"], "Competitive", check_all_types=True):
                 result = False
 
             region_to_capture = self.get_region_dimensions("queue_region_small")
-            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive"):
+            if self.capture_region(region_to_capture["x"], region_to_capture["y"],
+                                   region_to_capture["width"],
+                                   region_to_capture["height"], "Competitive", check_all_types=True):
                 result = False
 
             region_to_capture = self.get_region_dimensions("queue_region_top_left")
-            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive"):
+            if self.capture_region(region_to_capture["x"], region_to_capture["y"],
+                                   region_to_capture["width"],
+                                   region_to_capture["height"], "Competitive", check_all_types=True):
                 result = False
 
             self.queue_cancelled = result
             time.sleep(7)  # We detect if we're not in queue every 7 seconds.
 
     def is_game_finished(self):
-        # Take screenshots and if we find the competitive cards, we return True.
-        region_to_capture = self.get_region_dimensions("comp_cards_region")
-        return self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"], region_to_capture["height"], game_finished_expected_text)
+        # Take screenshots and if we find one of the end of game menus, we return True. We want to check the first
+        # menus that appear at the end of the game first. And if they're present, return True. Otherwise continue
+        # checking the later menus.
+        region_to_capture = self.get_region_dimensions("potm_title_region")
+        potm_title = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                         region_to_capture["height"], "Play of the Match")
+
+        if potm_title: return True
+
+        region_to_capture = self.get_region_dimensions("progression_screen_title_region")
+
+        if self.overwatch_client is not None:
+            left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
+            image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
+
+            # Crop the region by the defined coordinates
+            region = image.crop((region_to_capture["x"], region_to_capture["y"],
+                                 region_to_capture["x"] + region_to_capture["width"],
+                                 region_to_capture["y"] + region_to_capture["height"]))
+
+        prog_title1 = self.check_text(region, "Competitive - Role Queue", False)
+        prog_title2 = self.check_text(region, "Competitive - Open Queue", False)
+        prog_title3 = self.check_text(region, "Quick Play - Role Queue", False)
+        prog_title4 = self.check_text(region, "Quick Play - Open Queue", False)
+
+        if prog_title1 or prog_title2 or prog_title3 or prog_title4: return True
+
+        region_to_capture = self.get_region_dimensions("comp_progress_cards_region")
+        comp_progress = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                            region_to_capture["height"], "Competitive Progress")
+
+        if comp_progress: return True
+
+        region_to_capture = self.get_region_dimensions("queue_cards_region")
+        comp_cards = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                         region_to_capture["height"], comp_cards_expected_text)
+        quick_cards = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
+                                          region_to_capture["height"], quick_cards_expected_text)
+
+        if comp_cards or quick_cards: return True
+
+        return False  # Otherwise, return False. None of the menus have been detected.
 
     def run_queue_watcher(self):
         while True:
             # First detect which phase the user is in (assuming the user queued before launching the client).
             self.detect_and_set_current_phase()
             while not self.found_game:
-                region_to_capture = self.get_region_dimensions("queue_region_big")
-                while not self.active_queue_phases[0]:
-                    print(f'In Phase 1')
-                    self.capture_and_set_phase(region_to_capture, 0)
-                    time.sleep(1)
-
-                region_to_capture = self.get_region_dimensions("queue_region_small")
-                while not self.active_queue_phases[1] and self.active_queue_phases[0]:
-                    print(f'In Phase 2')
-                    self.capture_and_set_phase(region_to_capture, 1)
-                    time.sleep(0.5)
-
                 region_to_capture = self.get_region_dimensions("queue_pop_region")
-                while not self.active_queue_phases[2] and self.active_queue_phases[1]:
-                    print(f'In Phase 3')
-                    self.capture_and_set_phase(region_to_capture, 2, condition="Game Found!")
-                    time.sleep(0.5)
+                while not self.active_queue_phases[0]:
+                    print(f'Waiting for match...')
+                    self.capture_and_set_phase(region_to_capture, 0, condition="Game Found!")
 
                 # Detect false queue pop. Find Entering Game, and look for big box, if that exists then false queue -
                 # reset to phase 3.
                 region_to_capture = self.get_region_dimensions("enter_game_region")
                 region_to_check = self.get_region_dimensions("queue_region_big")
-                while not self.active_queue_phases[3] and self.active_queue_phases[2]:
-                    print(f'In Phase 4')
-                    self.capture_and_set_phase(region_to_capture, 3, condition="Entering Game")
-                    if self.capture_region(region_to_check["x"], region_to_check["y"], region_to_check["width"],
-                                           region_to_check["height"], "Competitive"):
-                        self.active_queue_phases[0] = self.active_queue_phases[1] = True
-                        self.active_queue_phases[2] = self.active_queue_phases[3] = False
+                while not self.active_queue_phases[1] and self.active_queue_phases[0]:
+                    self.capture_and_set_phase(region_to_capture, 1, condition="Entering Game")
+                    if self.capture_region(region_to_check["x"], region_to_check["y"],
+                                           region_to_check["width"],
+                                           region_to_check["height"], "Competitive", check_all_types=True):
+                        self.active_queue_phases[0] = self.active_queue_phases[1] = False
                         break
-                    time.sleep(0.25)  # Short window of time to detect this phase.
 
                 # If the phases haven't been reset, and we finished all loops.
-                if self.active_queue_phases[3]:
+                if self.active_queue_phases[1]:
                     print(f'Found game...')
                     self.found_game = True
 
             # Game Found
-            # todo: make this process better. In 5 seconds, we might miss the competitive cards window because of the user.
             self.client_handler.game_found(self.selected_hero)
             while self.found_game:
                 print(f'Checking if game is over...')
                 if self.is_game_finished():
-                    self.active_queue_phases[0] = self.active_queue_phases[1] = self.active_queue_phases[2] = \
-                        self.active_queue_phases[3] = False
+                    self.active_queue_phases[0] = self.active_queue_phases[1] = False
                     self.found_game = False
                     self.client_handler.game_finished()
                     self.selected_hero = None
                     break  # Break to save waiting 5 extra seconds for no reason :)
-                time.sleep(5)
+                time.sleep(1)

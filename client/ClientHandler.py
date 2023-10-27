@@ -145,6 +145,9 @@ class ClientHandler:
     def set_select_hero_scheduled(self):
         self.select_hero_scheduled_bool = True
 
+    def reset_select_hero_scheduled(self):
+        self.select_hero_scheduled_bool = False
+
     def select_hero_scheduled(self):
         self.client_socket.send(b'!select_hero_scheduled')
 
