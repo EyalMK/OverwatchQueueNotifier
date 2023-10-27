@@ -297,17 +297,12 @@ class QueueWatcher:
             time.sleep(1)
 
     def get_resolution(self):
-        try:
-            home_dir = os.path.expanduser("~")
-            config_path = os.path.join(home_dir, 'Documents', 'Overwatch', 'Settings', 'Settings_v0.ini')
-
-            config = configparser.ConfigParser()
-            config.read(config_path)
-
-            return int(config['Render.13']['FullScreenWidth'].split('"')[1]), int(
-                config['Render.13']['FullScreenHeight'].split('"')[1])
-        except Exception as e:
-            print(f'Error retrieving Overwatch resolution: {e}')
+        if self.overwatch_client is not None:
+            rect = win32gui.GetClientRect(self.overwatch_client)
+            width = rect[2] - rect[0]
+            height = rect[3] - rect[1]
+            return width, height
+        return 0, 0  # It'll basically cause the check to fail.
 
     def get_region_dimensions(self, region):
         res_w, res_h = self.get_resolution()
