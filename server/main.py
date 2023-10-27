@@ -1,7 +1,7 @@
 import asyncio
 import socket
 import sys
-
+import threading
 from dotenv import load_dotenv
 from threading import Thread
 import os
@@ -42,6 +42,27 @@ class App:
     def get_awaiting_connections(self):
         return self.awaiting_connections
 
+    def handle_client_connection(self, socket_conn, address):
+        try:
+            while True:
+                # If there's a connected client, get the message. Otherwise, there are no connected clients.
+                # Break loop and wait for a client.
+                try:
+                    message = socket_conn.recv(1024).decode()
+                except ConnectionResetError:
+                    break
+
+                # Read message - if command, take care of it.
+                if not message:
+                    break
+                print(f'Received message {message}')
+                if message.startswith("!"):
+                    self.handle_command(message, socket_conn)
+        finally:
+            self.remove_client(socket_conn)
+            print(f'Client disconnected.')
+            print(f'Active connections: {len(self.connected_clients)}')
+
     def socket_connection(self):
         # When running dev-env, environment variables SERVER_IP/PORT will be available.
         ip_address = os.getenv('SERVER_IP', '')
@@ -52,25 +73,8 @@ class App:
         print(f'Server listening on {ip_address}:{port}')
         while True:
             socket_conn, address = server_socket.accept()
-            try:
-                while True:
-                    # If there's a connected client, get the message. Otherwise, there are no connected clients.
-                    # Break loop and wait for a client.
-                    try:
-                        message = socket_conn.recv(1024).decode()
-                    except ConnectionResetError:
-                        break
-
-                    # Read message - if command, take care of it.
-                    if not message:
-                        break
-                    print(f'Received message {message}')
-                    if message.startswith("!"):
-                        self.handle_command(message, socket_conn)
-            finally:
-                self.remove_client(socket_conn)
-                print(f'Client disconnected.')
-                print(f'Active connections: {len(self.connected_clients)}')
+            th = threading.Thread(target=self.handle_client_connection, args=(socket_conn, address))
+            th.start()
 
     def run_async_coroutine_with_discord_bot(self, socket_conn, method):
         # Since a thread is handling the socket communication, and the call to send the user a message needs to
