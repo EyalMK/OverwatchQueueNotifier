@@ -20,8 +20,9 @@ jobs:
         run: |
           IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest"
 
-          for CONTAINER_ID in $(docker ps -q --filter ancestor=$IMAGE_NAME); do
-              docker stop $CONTAINER_ID
+          for CONTAINER_ID in $(docker ps -q --filter ancestor=$IMAGE_NAME);
+          do
+              docker stop $CONTAINER_ID && docker rm $CONTAINER_ID
           done
 
       - name: Build Docker Image
