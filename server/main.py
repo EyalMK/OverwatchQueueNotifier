@@ -44,7 +44,7 @@ class App:
 
     def socket_connection(self):
         # When running dev-env, environment variables SERVER_IP/PORT will be available.
-        ip_address = os.getenv('SERVER_IP', '0.0.0.0')
+        ip_address = os.getenv('SERVER_IP', '')
         port = int(os.getenv('SERVER_PORT', 60650))
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((ip_address, port))
