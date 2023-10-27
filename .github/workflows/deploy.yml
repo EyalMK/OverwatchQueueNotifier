@@ -18,11 +18,11 @@ jobs:
 
       - name: Stop and Remove Existing Container
         run: |
-          docker stop ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
-          docker rm ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
+          IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest"
 
-      - name: Remove Existing Image (if exists)
-        run: docker rmi ${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest || true
+          for CONTAINER_ID in $(docker ps -q --filter ancestor=$IMAGE_NAME); do
+              docker stop $CONTAINER_ID
+          done
 
       - name: Build Docker Image
         run: docker buildx build --platform linux/amd64 -t overwatchqueuenotifier --build-arg DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }} --build-arg DISCORD_INFORMATION_CHANNEL_ID=${{ secrets.DISCORD_INFO_CHANNEL_ID }} .
