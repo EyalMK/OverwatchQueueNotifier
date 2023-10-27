@@ -136,7 +136,7 @@ class App:
             task = asyncio.run_coroutine_threadsafe(self.discord_bot.send_socket_user_id_by_username(username),
                                                     self.discord_bot.loop)
             user_id = str(task.result())
-            self.awaiting_connections[user_id] = socket_conn
+            self.awaiting_connections[user_id] = User(socket_conn)
             print(f'Awaiting authorization from {user_id}...')
 
     def get_user_id_from_socket(self, socket_conn):
@@ -148,8 +148,9 @@ class App:
         except Exception as e:
             print(f'Discord User ID of this connection was not found. Error: {e}')
 
-    def add_client(self, user_id, client_socket):
-        self.connected_clients[user_id] = User(client_socket)
+    def add_client(self, user_id):
+        self.connected_clients[user_id] = self.awaiting_connections[user_id]
+        del self.awaiting_connections[user_id]
 
     def remove_client(self, socket_conn):
         try:

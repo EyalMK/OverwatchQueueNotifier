@@ -41,15 +41,15 @@ class DiscordBot(discord.Client):
                     return
                 else:
                     try:
-                        self.server.add_client(user_id, awaiting_connections[user_id])  # (
-                        # discord id, socket connection)
+                        self.server.add_client(user_id)
                         response = f'!authorized_login {message.author.global_name}'.encode()
-                        clients[user_id].get_socket().send(response)
+
+                        new_clients = self.server.get_connected_clients()  # Updated Clients
+                        new_clients[user_id].get_socket().send(response)
                         print(f'Received authorization from {user_id}')
                         await message.author.send(f'Connection authorized.')
-                        self.server.remove_awaiting_connection(user_id)
                         print(f'Client connected.')
-                        print(f'Active connections: {len(clients)}')
+                        print(f'Active connections: {len(new_clients)}')
                     except OSError as e:
                         self.server.remove_client(awaiting_connections[user_id])
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
