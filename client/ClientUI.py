@@ -65,7 +65,7 @@ class LoginScreen:
 
     def submit(self):
         username = self.id_var.get()
-        if username == '':
+        if username == '' or username == ' ':
             self.response_var.set(f'Invalid username.')
             return
         try:
