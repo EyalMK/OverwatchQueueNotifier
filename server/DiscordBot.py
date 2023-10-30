@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
-import discord
 import os
+
+import discord
+from dotenv import load_dotenv
 
 # Set intents
 intents = discord.Intents.default()
@@ -98,9 +99,6 @@ class DiscordBot(discord.Client):
             elif message.content == '!commands':
                 await self.send_commands(message.author)
 
-            if message.content == '!selecthero':
-                await self.select_hero(message.author)
-
             # Admin Zone
             if message.guild and message.author == message.guild.owner:
                 if message.content == '!admin-cmd':
@@ -139,8 +137,8 @@ class DiscordBot(discord.Client):
     async def inform_user_select_hero_success(self, user_id):
         await self.send_user_message(user_id, "Hero has been selected.")
 
-    async def inform_user_select_hero_scheduled(self, user_id):
-        await self.send_user_message(user_id, "Hero has been scheduled for selection when a game is found.")
+    async def inform_user_select_hero_scheduled(self, user_id, hero):
+        await self.send_user_message(user_id, f'{hero} has been scheduled for selection when a game is found.')
 
     async def inform_user_resolution_error(self, user_id):
         await self.send_user_message(user_id, "Your monitor's resolution does not match the specified Overwatch "

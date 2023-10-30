@@ -1,16 +1,18 @@
-import sys
 import os
+import sys
 import time
+import tkinter as tk
+from ctypes import windll
+from threading import Thread
 
 import cv2
 import numpy as np
+import pyautogui
+import pytesseract
 import win32con
 import win32gui
-import configparser
-import pytesseract
-import pyautogui
-from threading import Thread
-import tkinter as tk
+import win32ui
+from PIL import Image
 
 _path = r'C:/Program Files/Tesseract-OCR/tesseract.exe'  # Dev env default path
 if getattr(sys, 'frozen', False):
@@ -19,7 +21,6 @@ if getattr(sys, 'frozen', False):
 pytesseract.pytesseract.tesseract_cmd = _path
 
 heroes_coordinates_1920x1080 = {
-    #  [x, y]
     # Tanks
     "D.Va": [250, 830],
     "Doomfist": [320, 830],
@@ -65,8 +66,10 @@ heroes_coordinates_1920x1080 = {
     "Zenyatta": [1660, 890]
 }
 
-comp_cards_expected_text = "competitive play competitive play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
-quick_cards_expected_text = "quick play quick play\nrole queue open queue\n\nchoose a role before you play any role.\nplay."
+comp_cards_expected_text = "competitive play competitive play\nrole queue open queue\n\nchoose a role before you play " \
+                           "any role.\nplay."
+quick_cards_expected_text = "quick play quick play\nrole queue open queue\n\nchoose a role before you play any " \
+                            "role.\nplay."
 
 region_resolution_options = {
     "queue_region_big_1920x1080": {
@@ -229,12 +232,36 @@ region_resolution_options = {
 }
 
 
+def find_overwatch():
+    # Finds Overwatch window.
+    while True:
+        hwnd = win32gui.FindWindow(None, 'Overwatch')
+        if hwnd != 0:
+            print(f'Found overwatch...')
+            return hwnd
+        print(f'Looking for Overwatch...')
+        time.sleep(1)
+
+
+def check_text(image, expected_text, check_all_types):
+    # Returns True if expected_text is found in the provided image.
+    gray_image = image.convert('L')
+    extracted_text = pytesseract.image_to_string(gray_image)
+
+    # If we requested to check all type of matches, we opt for this block check.
+    if check_all_types:
+        formatted_text = extracted_text.lower()
+        result = "Quick Play".lower() in formatted_text or "Competitive".lower() in formatted_text
+        return result
+
+    return expected_text.lower() in extracted_text.lower()
+
+
 class QueueWatcher:
     found_game = False
-    queue_cancelled = False
-    active_queue_phases = [False, False]
     # Phase 0: Find Game Found text from screenshot of queue pop box region.
     # Phase 1: Find Entering Game text from screenshot of entering game box region. (To avoid false queues)
+    active_queue_phases = [False, False]
     monitor_resolution = None  # (Width, Height)
     overwatch_resolution = None  # (Width, Height)
     overwatch_client = None
@@ -249,7 +276,7 @@ class QueueWatcher:
         self.get_monitor_resolution()
 
         # While Overwatch window is not found, keep looking before proceeding.
-        self.overwatch_client = self.find_overwatch()
+        self.overwatch_client = find_overwatch()
 
         # When Overwatch window is found, make sure the resolution matches the main monitor resolution.
         self.get_resolution()
@@ -265,9 +292,6 @@ class QueueWatcher:
         # the top middle of the screen, there is a red bar containing the words "Competitive" and a timer
         queue_watcher_thread = Thread(target=self.run_queue_watcher)
         queue_watcher_thread.start()
-
-        queue_detector_thread = Thread(target=self.detect_queue)
-        queue_detector_thread.start()
 
     def set_overwatch_active_window(self):
         try:
@@ -288,16 +312,6 @@ class QueueWatcher:
         root.destroy()
 
         self.monitor_resolution = width, height
-
-    def find_overwatch(self):
-        # Finds Overwatch window.
-        while True:
-            hwnd = win32gui.FindWindow(None, 'Overwatch')
-            if hwnd != 0:
-                print(f'Found overwatch...')
-                return hwnd
-            print(f'Looking for Overwatch...')
-            time.sleep(1)
 
     def get_resolution(self):
         if self.overwatch_client is not None:
@@ -367,6 +381,7 @@ class QueueWatcher:
         pyautogui.moveTo(actual_x, actual_y, duration=0.3)
 
     def leave_queue(self, action):
+        self.set_overwatch_active_window()
         if action == 1:
             # Hover over rectangle for 0.5 sec and then press "Cancel"
             # Set the coordinates to hover over
@@ -387,59 +402,51 @@ class QueueWatcher:
             pyautogui.click()
 
         elif action == 2:
-            if self.monitor_resolution == (1920, 1080):
-                # Set Overwatch active window.
-                self.set_overwatch_active_window()
-                time.sleep(0.2)
-
-                # Keep pressing Escape until check menu_region_1920x1080 passes
-                menu_region = self.get_region_dimensions("menu_region")
-                while not self.capture_region(menu_region["x"],
-                                              menu_region["y"],
-                                              menu_region["width"],
-                                              menu_region["height"],
-                                              "Menu"):
-                    pyautogui.press('esc')
-                    time.sleep(0.5)
-
-                # Menu found, press "Leave Game And Queue" and then "Yes". If in custom game, Menu has more options,
-                # therefore these coordinates will press "Leave Queue" and then "Show Lobby" instead.
-                x, y = 1077, 638
-
-                self.move_mouse(x, y)
-
-                # Wait for half a second
+            # Keep pressing Escape until check menu_region_1920x1080 passes
+            menu_region = self.get_region_dimensions("menu_region")
+            while not self.capture_region(menu_region["x"],
+                                          menu_region["y"],
+                                          menu_region["width"],
+                                          menu_region["height"],
+                                          "Menu"):
+                pyautogui.press('esc')
                 time.sleep(0.5)
 
-                # Left click.
-                pyautogui.click()
+            # Menu found, press "Leave Game And Queue" and then "Yes". If in custom game, Menu has more options,
+            # therefore these coordinates will press "Leave Queue" and then "Show Lobby" instead.
+            x, y = 1077, 638
 
-                # Press "Yes"
-                new_x, new_y = 1050, 600
-                self.move_mouse(new_x, new_y)
+            self.move_mouse(x, y)
 
-                # Wait for half a second
-                time.sleep(0.5)
+            # Wait for half a second
+            time.sleep(0.5)
 
-                # Left click.
-                pyautogui.click()
+            # Left click.
+            pyautogui.click()
 
-            elif self.monitor_resolution == (2560, 1440):
-                pass
+            # Press "Yes"
+            new_x, new_y = 1050, 600
+            self.move_mouse(new_x, new_y)
+
+            # Wait for half a second
+            time.sleep(0.5)
+
+            # Left click.
+            pyautogui.click()
 
     def check_available_selection(self):
-        # Take screenshot of region of the "Continue" Button.
+        # Take screenshot of region of the "Continue"/"Ready" Button.
         if self.overwatch_client is not None:
             left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
             image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
 
             # Crop the region by the defined coordinates and save it.
-            # todo: Get coordinates for 2560x1440 and send appropriate coordinates.
+            # todo: Get x,y,width,height for 2560x1440 and send appropriate coordinates.
             region = image.crop((875, 962, 875 + 170, 962 + 55))
-            region.save(os.getcwd() + 'con-bt-scrn.png')
+            region.save(os.getcwd() + '\\con-bt-scrn.png')
 
             # Load the image using OpenCV
-            image = cv2.imread(os.getcwd() + 'con-bt-scrn.png')
+            image = cv2.imread(os.getcwd() + '\\con-bt-scrn.png')
 
             # Convert the image to the HSV color space
             hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -457,7 +464,7 @@ class QueueWatcher:
             percentage_orange = (orange_pixels / total_pixels) * 100
 
             # If more than a certain percentage of the image is orange,
-            # consider it the pressable button
+            # consider it an available button
             return percentage_orange > 50  # 50 Threshold was deemed appropriate, considering some backgrounds are
             # orange and the button is actually transparent...
         return False  # Overwatch isn't running...
@@ -513,19 +520,6 @@ class QueueWatcher:
             self.selected_hero = hero
             self.client_handler.set_select_hero_scheduled()
 
-    def check_text(self, image, expected_text, check_all_types):
-        # Returns True if expected_text is found in the provided image.
-        gray_image = image.convert('L')
-        extracted_text = pytesseract.image_to_string(gray_image)
-
-        # If we requested to check all type of matches, we opt for this block check.
-        if check_all_types:
-            formatted_text = extracted_text.lower()
-            result = "Quick Play".lower() in formatted_text or "Competitive".lower() in formatted_text
-            return result
-
-        return expected_text.lower() in extracted_text.lower()
-
     def capture_region(self, x, y, width, height, expected_text, check_all_types=False):
         if self.overwatch_client is not None:
             left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
@@ -534,62 +528,72 @@ class QueueWatcher:
             # Crop the region by the defined coordinates
             region = image.crop((x, y, x + width, y + height))
 
-            return self.check_text(region, expected_text, check_all_types)
+            return check_text(region, expected_text, check_all_types)
         return False  # Overwatch isn't running...
 
-    def capture_and_set_phase(self, region, phase, condition="Competitive"):
-        if self.capture_region(region["x"], region["y"], region["width"], region["height"], condition):
+    # We use this only for queue detection, since it's fairly costly when used frequently.
+    # This takes a screenshot of a minimized window and recreates it (with a bitmap).
+    def capture_region_bitmap(self, x, y, width, height, expected_text, check_all_types=False):
+        if self.overwatch_client is not None:
+            # Get the window dimensions
+            left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
+
+            # Create a device context
+            hdesktop = win32gui.GetDesktopWindow()
+            desktop_dc = win32gui.GetWindowDC(hdesktop)
+            img_dc = win32ui.CreateDCFromHandle(desktop_dc)
+            mem_dc = img_dc.CreateCompatibleDC()
+
+            # Create a bitmap to save the screenshot
+            bmp = win32ui.CreateBitmap()
+            bmp.CreateCompatibleBitmap(img_dc, right - left, bottom - top)
+            mem_dc.SelectObject(bmp)
+
+            # Capture the window content
+            result = windll.user32.PrintWindow(self.overwatch_client, mem_dc.GetSafeHdc(), 3)
+            if result == 0:
+                return False  # Function failed.
+
+            # Convert the bitmap to a PIL image
+            bmpinfo = bmp.GetInfo()
+            img = Image.frombuffer(
+                'RGB',
+                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                bmp.GetBitmapBits(True),
+                'raw',
+                'BGRX',
+                0,
+                1
+            )
+
+            # Crop the region by the defined coordinates
+            region = img.crop((x, y, x + width, y + height))
+
+            # Clean up
+            mem_dc.DeleteDC()
+            win32gui.DeleteObject(bmp.GetHandle())
+            win32gui.ReleaseDC(hdesktop, desktop_dc)
+
+            return check_text(region, expected_text, check_all_types)
+
+    def capture_and_set_phase(self, region, phase, condition="Competitive", use_bmp=False):
+        capture_method = self.capture_region(region["x"], region["y"], region["width"], region["height"], condition)
+        if use_bmp:
+            capture_method = self.capture_region_bitmap(region["x"], region["y"], region["width"], region["height"], condition)
+
+        if capture_method:
             self.active_queue_phases[phase] = True
-            if phase == 1: self.active_queue_phases[0] = True  # If phase 1 is active, then set phase 0 to True as well.
-
-        # Actively look if queue has been cancelled (manually by the player), if so, reset all phases.
-        if self.queue_cancelled:
-            self.active_queue_phases[0] = self.active_queue_phases[1] = False
-
-    def detect_and_set_current_phase(self):
-        region_to_capture = self.get_region_dimensions("queue_region_big")
-        self.capture_and_set_phase(region_to_capture, 0)
-
-        region_to_capture = self.get_region_dimensions("queue_region_small")
-        self.capture_and_set_phase(region_to_capture, 1)
-
-        region_to_capture = self.get_region_dimensions("queue_region_top_left")
-        self.capture_and_set_phase(region_to_capture, 1)
-
-    def detect_queue(self):
-        # We don't want to detect if we're in a queue, in a match.
-        while not self.found_game:
-            result = True
-            # Detect either rectangle, or big box, or rectangle top left. If either exist, we're still in queue.
-            region_to_capture = self.get_region_dimensions("queue_region_big")
-            if self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive", check_all_types=True):
-                result = False
-
-            region_to_capture = self.get_region_dimensions("queue_region_small")
-            if self.capture_region(region_to_capture["x"], region_to_capture["y"],
-                                   region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive", check_all_types=True):
-                result = False
-
-            region_to_capture = self.get_region_dimensions("queue_region_top_left")
-            if self.capture_region(region_to_capture["x"], region_to_capture["y"],
-                                   region_to_capture["width"],
-                                   region_to_capture["height"], "Competitive", check_all_types=True):
-                result = False
-
-            self.queue_cancelled = result
-            time.sleep(7)  # We detect if we're not in queue every 7 seconds.
 
     def is_game_finished(self):
         # Take screenshots and if we find one of the end of game menus, we return True. We want to check the first
-        # menus that appear at the end of the game first. And if they're present, return True. Otherwise continue
+        # menus that appear at the end of the game first. And if they're present, return True. Otherwise, continue
         # checking the later menus.
         region_to_capture = self.get_region_dimensions("potm_title_region")
         potm_title = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
                                          region_to_capture["height"], "Play of the Match")
 
-        if potm_title: return True
+        if potm_title:
+            return True
 
         region_to_capture = self.get_region_dimensions("progression_screen_title_region")
 
@@ -602,18 +606,20 @@ class QueueWatcher:
                                  region_to_capture["x"] + region_to_capture["width"],
                                  region_to_capture["y"] + region_to_capture["height"]))
 
-        prog_title1 = self.check_text(region, "Competitive - Role Queue", False)
-        prog_title2 = self.check_text(region, "Competitive - Open Queue", False)
-        prog_title3 = self.check_text(region, "Quick Play - Role Queue", False)
-        prog_title4 = self.check_text(region, "Quick Play - Open Queue", False)
+            prog_title1 = check_text(region, "Competitive - Role Queue", False)
+            prog_title2 = check_text(region, "Competitive - Open Queue", False)
+            prog_title3 = check_text(region, "Quick Play - Role Queue", False)
+            prog_title4 = check_text(region, "Quick Play - Open Queue", False)
 
-        if prog_title1 or prog_title2 or prog_title3 or prog_title4: return True
+            if prog_title1 or prog_title2 or prog_title3 or prog_title4:
+                return True
 
         region_to_capture = self.get_region_dimensions("comp_progress_cards_region")
         comp_progress = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
                                             region_to_capture["height"], "Competitive Progress")
 
-        if comp_progress: return True
+        if comp_progress:
+            return True
 
         region_to_capture = self.get_region_dimensions("queue_cards_region")
         comp_cards = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
@@ -621,45 +627,51 @@ class QueueWatcher:
         quick_cards = self.capture_region(region_to_capture["x"], region_to_capture["y"], region_to_capture["width"],
                                           region_to_capture["height"], quick_cards_expected_text)
 
-        if comp_cards or quick_cards: return True
+        if comp_cards or quick_cards:
+            return True
 
         return False  # Otherwise, return False. None of the menus have been detected.
 
     def run_queue_watcher(self):
         while True:
-            # First detect which phase the user is in (assuming the user queued before launching the client).
-            self.detect_and_set_current_phase()
             while not self.found_game:
                 region_to_capture = self.get_region_dimensions("queue_pop_region")
+                print(f'Waiting for match...')
                 while not self.active_queue_phases[0]:
-                    print(f'Waiting for match...')
-                    self.capture_and_set_phase(region_to_capture, 0, condition="Game Found!")
+                    # If minimized, use BMP, otherwise, take a screenshot.
+                    if win32gui.IsIconic(self.overwatch_client):
+                        self.capture_and_set_phase(region_to_capture, 0, condition="Game Found!", use_bmp=True)
+                    else:
+                        self.capture_and_set_phase(region_to_capture, 0, condition="Game Found!")
 
-                # Detect false queue pop. Find Entering Game, and look for big box, if that exists then false queue -
-                # reset to phase 3.
-                region_to_capture = self.get_region_dimensions("enter_game_region")
+                # To make sure this isn't a false queue pop, we only confirm the finding of a match
+                # after seeing the hero selection screen.
+                region_to_capture = self.get_region_dimensions("hero_change_button_region")
                 region_to_check = self.get_region_dimensions("queue_region_big")
                 while not self.active_queue_phases[1] and self.active_queue_phases[0]:
-                    self.capture_and_set_phase(region_to_capture, 1, condition="Entering Game")
-                    if self.capture_region(region_to_check["x"], region_to_check["y"],
-                                           region_to_check["width"],
-                                           region_to_check["height"], "Competitive", check_all_types=True):
-                        self.active_queue_phases[0] = self.active_queue_phases[1] = False
-                        break
+                    self.capture_and_set_phase(region_to_capture, 1, condition="Ready")
 
-                # If the phases haven't been reset, and we finished all loops.
+                    # If it is a false queue pop, and we're back in queue, reset all phases.
+                    if win32gui.IsIconic(self.overwatch_client):
+                        false_queue = self.capture_region_bitmap(region_to_check["x"], region_to_check["y"], region_to_check["width"], region_to_check["height"], expected_text="Competitive", check_all_types=True)
+                    else:
+                        false_queue = self.capture_region(region_to_check["x"], region_to_check["y"], region_to_check["width"], region_to_check["height"], expected_text="Competitive", check_all_types=True)
+
+                    if false_queue:
+                        self.active_queue_phases[0] = self.active_queue_phases[1] = False
+
+                # If the phases haven't been reset, and we've left both loops.
                 if self.active_queue_phases[1]:
-                    print(f'Found game...')
+                    print(f'Found match...')
                     self.found_game = True
 
             # Game Found
             self.client_handler.game_found(self.selected_hero)
             while self.found_game:
-                print(f'Checking if game is over...')
                 if self.is_game_finished():
                     self.active_queue_phases[0] = self.active_queue_phases[1] = False
                     self.found_game = False
                     self.client_handler.game_finished()
                     self.selected_hero = None
-                    break  # Break to save waiting 5 extra seconds for no reason :)
-                time.sleep(1)
+                    break  # Break to save waiting extra seconds for no reason :)
+                time.sleep(1.5)

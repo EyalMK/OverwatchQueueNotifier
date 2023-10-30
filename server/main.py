@@ -1,10 +1,12 @@
 import asyncio
+import os
 import socket
 import sys
 import threading
-from dotenv import load_dotenv
 from threading import Thread
-import os
+
+from dotenv import load_dotenv
+
 from DiscordBot import DiscordBot
 
 
@@ -96,9 +98,6 @@ class App:
         elif message == '!select_hero_unavailable':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_unavailable)
 
-        elif message == '!select_hero_success':
-            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success)
-
         elif message == '!select_hero_scheduled':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_scheduled)
 
@@ -117,6 +116,17 @@ class App:
                     self.remove_client(socket_conn)
             except Exception as e:
                 print(f'Disconnection completed unsuccessfully. Failed to remove closed socket from server. {e}')
+
+        elif message.startswith('!select_hero_success'):
+            try:
+                hero = message.split(' ')[1]
+                if not hero:
+                    print("Hero not provided after scheduling.")
+                    return
+                self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success(hero))
+            except Exception as e:
+                print(f'Hero scheduling unsuccessful. {e}')
+
 
         elif message.startswith('!queue_cancellation_failed'):
             try:
