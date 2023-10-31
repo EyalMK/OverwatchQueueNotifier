@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
-import discord
 import os
+
+import discord
+from dotenv import load_dotenv
 
 # Set intents
 intents = discord.Intents.default()
@@ -98,9 +99,6 @@ class DiscordBot(discord.Client):
             elif message.content == '!commands':
                 await self.send_commands(message.author)
 
-            if message.content == '!selecthero':
-                await self.select_hero(message.author)
-
             # Admin Zone
             if message.guild and message.author == message.guild.owner:
                 if message.content == '!admin-cmd':
@@ -114,10 +112,10 @@ class DiscordBot(discord.Client):
             print('Error - user not found. Make sure to provide the correct user id.')
 
     async def send_user_reminder(self, user_id):
-        await self.send_user_message(user_id, "Reminder - Invite your friend/s :)")
+        await self.send_user_message(user_id, f'<@{user_id}> Reminder - Invite your friend/s :)')
 
     async def notify_user_game_found(self, user_id):
-        await self.send_user_message(user_id, "Your match has been found!")
+        await self.send_user_message(user_id, f'<@{user_id}> Your match has been found!')
 
     async def inform_user_select_hero_invalid(self, user_id):
         await self.send_user_message(user_id, "The hero you requested does not exist. Invalid input.")
@@ -139,8 +137,8 @@ class DiscordBot(discord.Client):
     async def inform_user_select_hero_success(self, user_id):
         await self.send_user_message(user_id, "Hero has been selected.")
 
-    async def inform_user_select_hero_scheduled(self, user_id):
-        await self.send_user_message(user_id, "Hero has been scheduled for selection when a game is found.")
+    async def inform_user_select_hero_scheduled(self, user_id, hero):
+        await self.send_user_message(user_id, f'{hero} has been scheduled for selection when a game is found.')
 
     async def inform_user_resolution_error(self, user_id):
         await self.send_user_message(user_id, "Your monitor's resolution does not match the specified Overwatch "

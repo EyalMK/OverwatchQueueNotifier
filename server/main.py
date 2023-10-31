@@ -1,10 +1,12 @@
 import asyncio
+import os
 import socket
 import sys
 import threading
-from dotenv import load_dotenv
 from threading import Thread
-import os
+
+from dotenv import load_dotenv
+
 from DiscordBot import DiscordBot
 
 
@@ -69,7 +71,7 @@ class App:
         port = int(os.getenv('SERVER_PORT', 60650))
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((ip_address, port))
-        server_socket.listen()
+        server_socket.listen(700)  # Up to 700 concurrent clients.
         print(f'Server listening on {ip_address}:{port}')
         while True:
             socket_conn, address = server_socket.accept()
@@ -99,9 +101,6 @@ class App:
         elif message == '!select_hero_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success)
 
-        elif message == '!select_hero_scheduled':
-            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_scheduled)
-
         elif message == '!queue_cancellation_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_cancel_queue_success)
 
@@ -117,6 +116,18 @@ class App:
                     self.remove_client(socket_conn)
             except Exception as e:
                 print(f'Disconnection completed unsuccessfully. Failed to remove closed socket from server. {e}')
+
+        elif message.startswith('!select_hero_scheduled'):
+            try:
+                hero = message.split(' ')[1]
+                if not hero:
+                    print("Hero name not provided after scheduling.")
+                    return
+                user_id = self.get_user_id_from_socket(socket_conn)
+                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_scheduled(user_id, hero), self.discord_bot.loop)
+            except Exception as e:
+                print(f'Hero scheduling unsuccessful. {e}')
+
 
         elif message.startswith('!queue_cancellation_failed'):
             try:
