@@ -98,8 +98,8 @@ class App:
         elif message == '!select_hero_unavailable':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_unavailable)
 
-        elif message == '!select_hero_scheduled':
-            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_scheduled)
+        elif message == '!select_hero_success':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success)
 
         elif message == '!queue_cancellation_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_cancel_queue_success)
@@ -117,13 +117,14 @@ class App:
             except Exception as e:
                 print(f'Disconnection completed unsuccessfully. Failed to remove closed socket from server. {e}')
 
-        elif message.startswith('!select_hero_success'):
+        elif message.startswith('!select_hero_scheduled'):
             try:
                 hero = message.split(' ')[1]
                 if not hero:
-                    print("Hero not provided after scheduling.")
+                    print("Hero name not provided after scheduling.")
                     return
-                self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success(hero))
+                user_id = self.get_user_id_from_socket(socket_conn)
+                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_scheduled(user_id, hero), self.discord_bot.loop)
             except Exception as e:
                 print(f'Hero scheduling unsuccessful. {e}')
 

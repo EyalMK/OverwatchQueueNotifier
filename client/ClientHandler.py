@@ -166,9 +166,9 @@ class ClientHandler:
                 self.queue_watcher.select_hero(hero_to_pick)
                 # If the method didn't fail and a hero wasn't scheduled, then it's been selected.
                 if not self.select_hero_failure and not self.select_hero_scheduled_bool:
-                    self.client_socket.send(f'!select_hero_success {hero_to_pick}'.encode())
+                    self.client_socket.send(b'!select_hero_success')
                 elif self.select_hero_scheduled_bool:  # If the method did indeed schedule a hero.
-                    self.client_socket.send(b'!select_hero_scheduled')
+                    self.client_socket.send(f'!select_hero_scheduled {hero_to_pick}'.encode())
                 else:
                     self.client_socket.send(b'!select_hero_unavailable')
             else:
@@ -178,8 +178,9 @@ class ClientHandler:
 
     def game_found(self, selected_hero):
         self.client_socket.send(b'!found_game')
-        if selected_hero is not None:
-            time.sleep(10)  # Until hero selection screen in the game is available.
+        time.sleep(2)
+        if selected_hero:
+            self.select_hero_scheduled_bool = False  # Reset
             self.select_hero(f'!select_hero {selected_hero}')
 
     def game_finished(self):

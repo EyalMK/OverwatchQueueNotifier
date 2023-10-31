@@ -325,6 +325,7 @@ class QueueWatcher:
     def cancel_queue(self):
         if self.found_game:
             self.client_handler.cancel_queue_failure(1)  # Errno 1: In game.
+            return
 
         # Check if rectangle exists atop. If so, PyAutoGUI to hover over it for 0.5 seconds and then go down 100
         # height and press on cancel. Else, check if rectangle exists top left. If so, press Escape until we see "Menu"
@@ -674,4 +675,4 @@ class QueueWatcher:
                     self.client_handler.game_finished()
                     self.selected_hero = None
                     break  # Break to save waiting extra seconds for no reason :)
-                time.sleep(1.5)
+                time.sleep(1)
