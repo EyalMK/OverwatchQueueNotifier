@@ -22,14 +22,21 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Stop and Remove Existing Container
+      - name: Stop and Remove Existing Containers and Images
         run: |
           IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest"
 
           for CONTAINER_ID in $(docker ps -q --filter ancestor=$IMAGE_NAME);
           do
-              docker stop $CONTAINER_ID && docker rm $CONTAINER_ID
+              docker stop $CONTAINER_ID
+              docker rm $CONTAINER_ID
           done
+          
+          for IMAGE_ID in $(docker images -q);
+          do
+            docker rmi $IMAGE_ID
+          done
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
