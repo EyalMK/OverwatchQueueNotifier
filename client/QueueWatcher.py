@@ -522,7 +522,7 @@ class QueueWatcher:
             self.client_handler.set_select_hero_scheduled()
 
     def capture_region(self, x, y, width, height, expected_text, check_all_types=False):
-        if self.overwatch_client is not None:
+        if self.overwatch_client:
             left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
             image = pyautogui.screenshot(region=(left, top, right - left, bottom - top))
 
@@ -535,7 +535,7 @@ class QueueWatcher:
     # We use this only for queue detection, since it's fairly costly when used frequently.
     # This takes a screenshot of a minimized window and recreates it (with a bitmap).
     def capture_region_bitmap(self, x, y, width, height, expected_text, check_all_types=False):
-        if self.overwatch_client is not None:
+        if self.overwatch_client:
             # Get the window dimensions
             left, top, right, bottom = win32gui.GetWindowRect(self.overwatch_client)
 
