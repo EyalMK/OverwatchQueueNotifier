@@ -31,11 +31,6 @@ jobs:
               docker stop $CONTAINER_ID
               docker rm $CONTAINER_ID
           done
-          
-          for IMAGE_ID in $(docker images -q);
-          do
-            docker rmi $IMAGE_ID
-          done
 
       - name: Build and push
         uses: docker/build-push-action@v5
