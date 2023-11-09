@@ -1,0 +1,19 @@
+FROM python:3.8-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY /tools .
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+# Make port 8080 available to the world outside this container
+EXPOSE 8080
+
+# Define environment variable for Flask to run in production mode
+ENV FLASK_ENV=production
+
+# Run gunicorn when the container launches, assuming tools/ is in the root directory of your project
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "api:app"]
