@@ -22,14 +22,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Remove all containers and images
-        run: |
-          # Stop and remove all running containers
-          docker rm -vf $(docker ps -aq)
-          
-          # Remove all images.
-          docker rmi -f $(docker images -aq)
-
       - name: Build and push OverwatchQueueNotifier
         uses: docker/build-push-action@v5
         with:
@@ -48,6 +40,13 @@ jobs:
           script: |
             cd /root/OverwatchQueueNotifier
             IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest"
+            
+            # Stop and remove all containers using the image
+            docker ps -a --filter ancestor="$IMAGE_NAME" --format "{{ '{{' }}.ID{{ '}}' }}" | xargs -r docker stop | xargs -r docker rm
+            
+            # Remove the old image
+            docker rmi "$IMAGE_NAME" || true
+
 
             # Pull the latest image
             docker pull "$IMAGE_NAME"
@@ -75,7 +74,13 @@ jobs:
           script: |
             cd /root/OverwatchQueueNotifier/tools
             IMAGE_NAME_API="${{ secrets.DOCKER_USERNAME }}/overwatchnotifier-api:latest"
-      
+            
+            # Stop and remove all containers using the API image
+            docker ps -a --filter ancestor="$IMAGE_NAME_API" --format "{{ '{{' }}.ID{{ '}}' }}" | xargs -r docker stop | xargs -r docker rm
+            
+            # Remove the old API image
+            docker rmi "$IMAGE_NAME_API" || true
+            
             # Pull the latest API image
             docker pull "$IMAGE_NAME_API"
       
