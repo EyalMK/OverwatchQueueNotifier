@@ -1,67 +1,16 @@
-import time
+import os
+import sys
 from threading import Thread
 
 import psutil
+from plyer import notification
 
 from QueueWatcher import QueueWatcher
+from game_info import get_hero_key, game_data
 
-# Heroes
-tanks = {
-    "D.Va": ["D.Va", "d.va", "dva", "Dva"],
-    "Doomfist": ["Doom", "doom", "DF", "df", "doomfist", "Doomfist"],
-    "Junker Queen": ["Junker Queen", "JQ", "Queen", "queen", "junker", "jq"],
-    "Orisa": ["orisa", "Orisa", "horse"],
-    "Ramattra": ["Ramattra", "Ram", "ram"],
-    "Reinhardt": ["Reinhardt", "Rein", "rein"],
-    "Roadhog": ["Roadhog", "road", "hog", "Hog"],
-    "Sigma": ["Sigma", "sigma", "sig", "Sig"],
-    "Winston": ["Winston", "winston", "monkey", "winton", "Winton"],
-    "Wrecking Ball": ["Wrecking Ball", "wrecking ball", "Ball", "ball", "hamster", "Hamster", "Hammond", "hammond"],
-    "Zarya": ["Zarya", "zarya"]
-}
-
-dps = {
-    "Ashe": ["Ashe", "ashe"],
-    "Bastion": ["Bastion", "bastion", "bast", "Bast"],
-    "Cassidy": ["Cassidy", "cassidy", "Cree", "cree"],
-    "Echo": ["Echo", "echo"],
-    "Genji": ["Genji", "genji", "genju"],
-    "Hanzo": ["Hanzo", "hanzo"],
-    "Junkrat": ["Junkrat", "junkrat", "Junk", "junk"],
-    "Mei": ["Mei", "mei", "the devil"],
-    "Pharah": ["Pharah", "pharah", "phara", "Phara"],
-    "Reaper": ["Reaper", "reaper", "reap"],
-    "Sojourn": ["Sojourn", "sojourn", "Soj", "soj"],
-    "Soldier: 76": ["Soldier: 76", "soldier: 76", "Soldier", "soldier", "sold", "Sold", "legs", "Legs"],
-    "Sombra": ["Sombra", "sombra", "somb"],
-    "Symmetra": ["Symmetra", "symmetra", "sym", "Symetra", "symetra"],
-    "Torbjorn": ["Torbjorn", "torbjorn", "Torb", "torb"],
-    "Tracer": ["Tracer", "tracer", "tr"],
-    "Widowmaker": ["Widowmaker", "widowmaker", "Widow", "widow"]
-}
-
-supports = {
-    "Ana": ["Ana", "ana"],
-    "Baptiste": ["Baptiste", "baptiste", "bap", "Bap"],
-    "Brigette": ["Brigette", "brigette", "brig", "Brig"],
-    "Illari": ["Illari", "illari"],
-    "Kiriko": ["Kiriko", "kiriko", "Kiri", "kiri"],
-    "Lifeweaver": ["Lifeweaver", "lifeweaver", "life", "Life", "Weaver", "weaver", "wifeleaver", "Wifeleaver"],
-    "Lucio": ["Lucio", "lucio"],
-    "Mercy": ["Mercy", "mercy"],
-    "Moira": ["Moira", "moira"],
-    "Zenyatta": ["Zenyatta", "zenyatta", "Zen", "zen"]
-}
-
-heroes = [item for hero in [tanks, dps, supports] for values in hero.values() for item in values]
-
-
-def get_hero_key(hero):
-    for hero_dict in [tanks, dps, supports]:
-        for key, values in hero_dict.items():
-            if hero in values:
-                return key
-    return hero
+favicon_path = os.getcwd() + '\\assets\\images\\favicon.ico'  # Dev env default path
+if getattr(sys, 'frozen', False):
+    favicon_path = os.path.join(sys._MEIPASS, './assets/images/favicon.ico')  # Client path
 
 
 def exit_game():
@@ -76,17 +25,17 @@ def exit_game():
 class ClientHandler:
     socket_thread_running = False
     reminder = False
-    connected_as = None  # Discord user
     queue_watcher = None
-    select_hero_failure = False
-    select_hero_scheduled_bool = False
+    scheduled_hero = None
+    hero_select_failed = False
 
-    def __init__(self, socket, main_thread):
+    def __init__(self, socket, main_app):
+        self.default_support = None
+        self.default_dps = None
+        self.default_tank = None
         self.discord_id = None
         self.client_socket = socket
-        self.main_thread = main_thread
-        print("Client Handler is running...")
-
+        self.main_app = main_app
         self.run()
 
     def receive_messages(self):
@@ -102,32 +51,41 @@ class ClientHandler:
                     self.cancel_queue()
                 elif message == 'exit_game':
                     exit_game()
-                elif message == '$user_id_not_found' or message == '$user_already_logged_in':  # Error messages from
-                    # server.
-                    self.exit_program()
+                elif message == '$user_already_logged_in':  # Error messages from server.
+                    # For now, we don't want to do anything.
+                    pass
 
                 if message.startswith('!authorized_login'):  # Command message from server.
                     self.authorized_login(message)
                 elif message.startswith('!select_hero'):
-                    self.select_hero(message)
-            except Exception as e:
-                print(f'Waiting for a message... {e}')
-                time.sleep(3)
+                    try:
+                        parts = message.split(' ')[1::]
+                        hero = " ".join(parts)
+                        self.schedule_hero(hero, manual=True)
+                    except Exception as e:
+                        print(f'Error !select_hero - {e}')
+
+            except:
+                self.socket_thread_running = False
+                print(f'Socket connection terminated.')
 
     def run(self):
+        print("Client Handler is running...")
         # Create a thread to manage socket communication.
         self.socket_thread_running = True
         socket_listen_thread = Thread(target=self.receive_messages, args=())
         socket_listen_thread.start()
 
     def init_queue_watcher(self):
-        self.queue_watcher = QueueWatcher(self)
+        self.queue_watcher.start()
 
     def activate_reminder(self):
         self.reminder = True
+        self.main_app.get_client_ui().set_reminder_var('Reminder is set.')
 
     def deactivate_reminder(self):
         self.reminder = False
+        self.main_app.get_client_ui().set_reminder_var('Reminder is not set.')
 
     def get_reminder(self):
         return self.reminder
@@ -141,54 +99,91 @@ class ClientHandler:
     def cancel_queue_success(self):
         self.client_socket.send(b'!queue_cancellation_success')
 
-    def set_select_hero_failure(self):
-        self.select_hero_failure = True
-
-    def set_select_hero_scheduled(self):
-        self.select_hero_scheduled_bool = True
-
-    def reset_select_hero_scheduled(self):
-        self.select_hero_scheduled_bool = False
-
     def select_hero_scheduled(self):
         self.client_socket.send(b'!select_hero_scheduled')
 
     def resolutions_not_matching(self):
         self.client_socket.send(b'!not_matching_resolution_error')
 
-    def select_hero(self, message):
-        try:
-            self.select_hero_failure = False  # Reset in-case the user selected another hero after a failed attempt.
-            parts = message.split(' ')[1::]
-            hero = " ".join(parts)
-            if hero in heroes:
-                hero_to_pick = get_hero_key(hero)
-                self.queue_watcher.select_hero(hero_to_pick)
-                # If the method didn't fail and a hero wasn't scheduled, then it's been selected.
-                if not self.select_hero_failure and not self.select_hero_scheduled_bool:
-                    self.client_socket.send(b'!select_hero_success')
-                elif self.select_hero_scheduled_bool:  # If the method did indeed schedule a hero.
-                    self.client_socket.send(f'!select_hero_scheduled {hero_to_pick}'.encode())
-                else:
-                    self.client_socket.send(b'!select_hero_unavailable')
-            else:
-                self.client_socket.send(b'!select_hero_invalid_error')
-        except Exception as e:
-            print(f'Invalid input. {e}')
+    def set_default_tank(self, hero):
+        self.default_tank = hero
 
-    def game_found(self, selected_hero):
-        self.client_socket.send(b'!found_game')
-        time.sleep(2)
-        if selected_hero:
-            self.select_hero_scheduled_bool = False  # Reset
-            self.select_hero(f'!select_hero {selected_hero}')
+    def set_default_dps(self, hero):
+        self.default_dps = hero
+
+    def set_default_support(self, hero):
+        self.default_support = hero
+
+    def set_hero_select_failure(self, boolean):
+        self.hero_select_failed = boolean
+
+    def get_default_heroes(self):
+        return [hero for hero in [self.default_tank, self.default_support, self.default_dps] if hero is not None]
+
+    def schedule_hero(self, hero, manual=False):
+        if hero in game_data['heroes']:
+            hero_to_select = get_hero_key(hero)
+
+            if self.queue_watcher.found_game:
+                return self.select_hero(hero_to_select, manual)
+            else:
+                try:
+                    self.queue_watcher.set_overwatch_active_window()
+                except:
+                    pass
+
+                self.scheduled_hero = hero_to_select
+                self.client_socket.send(f'!select_hero_scheduled {self.scheduled_hero}'.encode())
+        else:
+            self.client_socket.send(b'!select_hero_invalid')
+
+    def select_hero(self, hero, manual):
+        try:
+            default_heroes = self.get_default_heroes()
+            self.queue_watcher.select_hero(hero)
+
+            # Selection failed
+            if self.hero_select_failed:
+                if hero not in default_heroes or manual:
+                    self.client_socket.send(b'!select_hero_unavailable')
+                return False
+
+            # Selection succeeded
+            if hero in default_heroes and not manual:
+                self.client_socket.send(f'!select_default_hero_success {hero}'.encode())
+                return True
+            self.client_socket.send(b'!select_hero_success')
+            return True
+
+        except Exception as e:
+            print(f'Error selecting hero: {e}')
+
+    def game_found(self, objective, map_name):
+        msg = f'!found_game'
+        if objective != '':
+
+            # Edge case - The only time the objective is read wrong is when the map is Numbani.
+            # The OCR can't read Defend correctly over Numbani's background.
+            # Safer to just tell the player that they're defending, even when it's not the case, so they have time to set up
+            if map_name == 'Numbani':
+                objective = "defending"
+
+            msg += f' {objective}'
+
+        if map_name != '':
+            msg += f' {map_name}'
+
+        self.client_socket.send(msg.encode())
+        notification.notify(title='Overwatch Queue Notifier', message='Your match has been found!',
+                            app_icon=favicon_path, timeout=5)
 
     def game_finished(self):
+        self.scheduled_hero = None
+        self.hero_select_failed = False
+
         if self.reminder:
             self.client_socket.send(b'!remind_user')
             self.reminder = False  # Reset
-
-        self.select_hero_scheduled_bool = False  # Reset
 
     def link_discord_user(self, username):
         try:
@@ -200,25 +195,25 @@ class ClientHandler:
     def authorized_login(self, message):
         try:
             username = message.split(' ')[1]
-            self.connected_as = username
-            print(f'Connected discord user {self.connected_as} to server.')
+            self.discord_id = message.split(' ')[2]
+            self.main_app.get_client_ui().set_connected(username)
+            print(f'Connected discord user {username} to server.')
 
-            queue_watcher_thread = Thread(target=self.init_queue_watcher, args=())
+            self.queue_watcher = QueueWatcher(self)
+            queue_watcher_thread = Thread(target=self.init_queue_watcher)
             queue_watcher_thread.start()
-
-            gui_thread = Thread(target=self.main_thread.destroy_gui, args=())
-            gui_thread.start()
-
         except Exception as e:
             print(f'Error connecting to server. Restart and try again please. {e}')
 
-    def exit_program(self):
-        try:
-            # todo: Fix this method so it actually terminates the cmd.
-            # Terminate socket connection.
+    def stop_queue_watcher(self):
+        if self.queue_watcher is not None:
+            self.queue_watcher.stop()
+
+    def close_connection(self):
+        self.socket_thread_running = False
+        self.client_socket.close()
+
+    def send_disconnect(self):
+        if self.discord_id is not None and self.client_socket and not self.client_socket._closed:
             self.client_socket.send(f'!disconnect {self.discord_id}'.encode())
-            self.socket_thread_running = False
-            self.client_socket.close()
-            raise SystemExit("Program exited successfully.")
-        except Exception as e:
-            print(f'Error terminating program: {e}')
+            self.discord_id = None

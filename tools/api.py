@@ -129,6 +129,18 @@ region_resolution_options = {
         "width": 320,
         "height": 50
     },
+    "ready_battle_region_1920x1080": {
+        "x": 780,
+        "y": 505,
+        "width": 320,
+        "height": 50
+    },
+    "ready_battle_region_2560x1440": {
+        "x": 780,
+        "y": 505,
+        "width": 320,
+        "height": 50
+    },
     "enter_game_region_2560x1440": {
         "x": 936.67,
         "y": 606.67,
@@ -264,7 +276,7 @@ tanks = {
 dps = {
     "Ashe": ["Ashe", "ashe"],
     "Bastion": ["Bastion", "bastion", "bast", "Bast"],
-    "Cassidy": ["Cassidy", "cassidy", "Cree", "cree"],
+    "Cassidy": ["Cassidy", "cassidy", "Cree", "cree", "cass", "Cass"],
     "Echo": ["Echo", "echo"],
     "Genji": ["Genji", "genji", "genju"],
     "Hanzo": ["Hanzo", "hanzo"],

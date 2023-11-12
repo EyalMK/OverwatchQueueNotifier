@@ -1,6 +1,7 @@
 import os
 
 import discord
+import docker
 from dotenv import load_dotenv
 
 # Set intents
@@ -15,6 +16,26 @@ cmds = ["[+] !selecthero {HeroName} - To select a hero as soon as a game is foun
         "[+] !cancelqueue - Cancels your Overwatch queue.\n\n",
         "[+] !exitgame - Terminates your active Overwatch game client.\n\n",
         ]
+
+
+async def restart_server():
+    load_dotenv()
+    image_name = os.getenv('IMAGE_NAME')
+    cl = docker.from_env()
+
+    container = None
+    for c in cl.containers.list():
+        if image_name in c.image.tags:
+            container = c
+            break
+
+    if container:
+        container.stop()
+        container.remove()
+        cl.containers.run(image=image_name, detach=True)
+        print(f"Container '{container.name}' restarted successfully.")
+    else:
+        print(f"No container found with image '{image_name}'.")
 
 
 class DiscordBot(discord.Client):
@@ -37,13 +58,13 @@ class DiscordBot(discord.Client):
             awaiting_connections = self.server.get_awaiting_connections()
             if user_id in awaiting_connections:
                 if user_id in clients:
-                    await message.author.send('User ID already connected from a client. Exiting client...')
+                    await message.author.send('User ID already connected from a client.')
                     clients[user_id].send(b'$user_already_logged_in')
                     return
                 else:
                     try:
                         self.server.add_client(user_id)
-                        response = f'!authorized_login {message.author.global_name}'.encode()
+                        response = f'!authorized_login {message.author.global_name} {user_id}'.encode()
 
                         new_clients = self.server.get_connected_clients()  # Updated Clients
                         new_clients[user_id].get_socket().send(response)
@@ -53,6 +74,7 @@ class DiscordBot(discord.Client):
                         print(f'Active connections: {len(new_clients)}')
                     except OSError as e:
                         self.server.remove_client(awaiting_connections[user_id])
+                        self.server.remove_client(clients[user_id])
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
                         print(f'Socket not found. Error: {e}')
             else:
@@ -103,6 +125,13 @@ class DiscordBot(discord.Client):
             if message.guild and message.author == message.guild.owner:
                 if message.content == '!admin-cmd':
                     await self.announce_commands()
+                elif message.content == '!admin-restart':
+                    await restart_server()
+                elif message.content == '!admin-connections':
+                    await self.get_number_active_connections(message.guild.owner)
+        else:
+            await message.author.send(
+                "You're not connected and cannot communicate with the Overwatch Queue Notifier at this time.")
 
     async def send_user_message(self, user_id, message):
         user = self.get_user(int(user_id))
@@ -114,8 +143,14 @@ class DiscordBot(discord.Client):
     async def send_user_reminder(self, user_id):
         await self.send_user_message(user_id, f'<@{user_id}> Reminder - Invite your friend/s :)')
 
-    async def notify_user_game_found(self, user_id):
-        await self.send_user_message(user_id, f'<@{user_id}> Your match has been found!')
+    async def notify_user_game_found(self, user_id, obj_mode=None, map_name=None):
+        msg = f'<@{user_id}> Your match has been found!'
+        if obj_mode is not None:
+            msg += f" You're {obj_mode}"
+        if map_name is not None:
+            msg += f" {map_name}"
+        msg += "."
+        await self.send_user_message(user_id, msg)
 
     async def inform_user_select_hero_invalid(self, user_id):
         await self.send_user_message(user_id, "The hero you requested does not exist. Invalid input.")
@@ -124,6 +159,9 @@ class DiscordBot(discord.Client):
         await self.send_user_message(user_id, "The hero you requested is not available. It's either taken or it's not "
                                               "the role you've "
                                               "queued for.")
+
+    async def inform_user_select_default_hero_unavailable(self, user_id):
+        await self.send_user_message(user_id, "None of the default heroes are available for selection.")
 
     async def inform_user_cancel_queue_failure(self, user_id, errno):
         if errno == '1':
@@ -134,8 +172,11 @@ class DiscordBot(discord.Client):
     async def inform_user_cancel_queue_success(self, user_id):
         await self.send_user_message(user_id, "Queue has been cancelled.")
 
-    async def inform_user_select_hero_success(self, user_id):
-        await self.send_user_message(user_id, "Hero has been selected.")
+    async def inform_user_select_hero_success(self, user_id, hero=None):
+        if hero is None:
+            await self.send_user_message(user_id, "Hero has been selected.")
+        else:  # If hero is not None, it means, a default hero was selected.
+            await self.send_user_message(user_id, f'Default hero {hero} has been selected.')
 
     async def inform_user_select_hero_scheduled(self, user_id, hero):
         await self.send_user_message(user_id, f'{hero} has been scheduled for selection when a game is found.')
@@ -170,6 +211,11 @@ class DiscordBot(discord.Client):
     async def send_commands(self, user):
         # Send the formatted commands.
         await user.send(await self.format_commands())
+
+    async def get_number_active_connections(self, user):
+        clients = self.server.get_connected_clients()
+        future_clients = self.server.get_awaiting_connections()
+        await user.send(f'Current active connected clients: {len(clients) + len(future_clients)}')
 
     async def reminder_invitation(self, user):
         try:

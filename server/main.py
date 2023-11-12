@@ -44,7 +44,7 @@ class App:
     def get_awaiting_connections(self):
         return self.awaiting_connections
 
-    def handle_client_connection(self, socket_conn, address):
+    def handle_client_connection(self, socket_conn):
         try:
             while True:
                 # If there's a connected client, get the message. Otherwise, there are no connected clients.
@@ -57,13 +57,10 @@ class App:
                 # Read message - if command, take care of it.
                 if not message:
                     break
-                print(f'Received message {message}')
                 if message.startswith("!"):
                     self.handle_command(message, socket_conn)
         finally:
             self.remove_client(socket_conn)
-            print(f'Client disconnected.')
-            print(f'Active connections: {len(self.connected_clients)}')
 
     def socket_connection(self):
         # When running dev-env, environment variables SERVER_IP/PORT will be available.
@@ -74,8 +71,8 @@ class App:
         server_socket.listen(700)  # Up to 700 concurrent clients.
         print(f'Server listening on {ip_address}:{port}')
         while True:
-            socket_conn, address = server_socket.accept()
-            th = threading.Thread(target=self.handle_client_connection, args=(socket_conn, address))
+            socket_conn, _ = server_socket.accept()
+            th = threading.Thread(target=self.handle_client_connection, args=(socket_conn,))
             th.start()
 
     def run_async_coroutine_with_discord_bot(self, socket_conn, method):
@@ -89,17 +86,17 @@ class App:
         if message == '!remind_user':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.send_user_reminder)
 
-        elif message == '!found_game':
-            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.notify_user_game_found)
-
-        elif message == '!select_hero_invalid_error':
-            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_invalid)
-
         elif message == '!select_hero_unavailable':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_unavailable)
 
         elif message == '!select_hero_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_success)
+
+        elif message == '!select_hero_invalid':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_hero_invalid)
+
+        elif message == '!select_default_hero_unavailable':
+            self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_select_default_hero_unavailable)
 
         elif message == '!queue_cancellation_success':
             self.run_async_coroutine_with_discord_bot(socket_conn, self.discord_bot.inform_user_cancel_queue_success)
@@ -113,21 +110,61 @@ class App:
                 if discord_id is not None:
                     if discord_id in self.awaiting_connections.keys():
                         self.remove_awaiting_connection(discord_id)
-                    self.remove_client(socket_conn)
+                    if discord_id in self.connected_clients.keys():
+                        self.remove_client(socket_conn)
             except Exception as e:
                 print(f'Disconnection completed unsuccessfully. Failed to remove closed socket from server. {e}')
 
+        elif message.startswith('!found_game'):
+            try:
+                user_id = self.get_user_id_from_socket(socket_conn)
+                obj = message.split(' ')[1]
+                map_name = ''
+                try:
+                    parts = message.split(' ')[2::]
+                    map_name = " ".join(parts)
+                except:
+                    pass
+
+                if not obj:
+                    print('Objective mode not provided.')
+                    asyncio.run_coroutine_threadsafe(self.discord_bot.notify_user_game_found(user_id),
+                                                     self.discord_bot.loop)
+                    return
+                if not map_name:
+                    print('Map name not provided.')
+                    asyncio.run_coroutine_threadsafe(self.discord_bot.notify_user_game_found(user_id, obj_mode=obj),
+                                                     self.discord_bot.loop)
+                    return
+
+                asyncio.run_coroutine_threadsafe(
+                    self.discord_bot.notify_user_game_found(user_id, obj_mode=obj, map_name=map_name),
+                    self.discord_bot.loop)
+            except Exception as e:
+                print(f'Game Found Notification unsuccessful. {e}')
+
         elif message.startswith('!select_hero_scheduled'):
             try:
-                hero = message.split(' ')[1]
+                parts = message.split(' ')[1::]
+                hero = " ".join(parts)
                 if not hero:
-                    print("Hero name not provided after scheduling.")
                     return
                 user_id = self.get_user_id_from_socket(socket_conn)
-                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_scheduled(user_id, hero), self.discord_bot.loop)
+                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_scheduled(user_id, hero),
+                                                 self.discord_bot.loop)
             except Exception as e:
                 print(f'Hero scheduling unsuccessful. {e}')
 
+        elif message.startswith('!select_default_hero_success'):
+            try:
+                parts = message.split(' ')[1::]
+                hero = " ".join(parts)
+                if not hero:
+                    return
+                user_id = self.get_user_id_from_socket(socket_conn)
+                asyncio.run_coroutine_threadsafe(self.discord_bot.inform_user_select_hero_success(user_id, hero=hero), self.discord_bot.loop)
+            except Exception as e:
+                print(f'Default hero selection error: {e}')
 
         elif message.startswith('!queue_cancellation_failed'):
             try:
@@ -157,7 +194,7 @@ class App:
                     return user_id
             raise ValueError('User ID not found for this socket connection')
         except Exception as e:
-            print(f'Discord User ID of this connection was not found. Error: {e}')
+            print(f'Error: {e}')
 
     def add_client(self, user_id):
         self.connected_clients[user_id] = self.awaiting_connections[user_id]
@@ -166,8 +203,10 @@ class App:
     def remove_client(self, socket_conn):
         try:
             del self.connected_clients[self.get_user_id_from_socket(socket_conn)]
+            print(f'Client disconnected.')
+            print(f'Active connections: {len(self.connected_clients)}')
         except Exception as e:
-            print(f'Failed to disconnect client from server. Error. {e}')
+            pass  # User had already disconnected before closing connection.
 
     def remove_awaiting_connection(self, user_id):
         try:
