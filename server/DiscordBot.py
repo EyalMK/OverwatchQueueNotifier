@@ -183,8 +183,8 @@ class DiscordBot(discord.Client):
 
     async def inform_user_resolution_error(self, user_id):
         await self.send_user_message(user_id, "Your monitor's resolution does not match the specified Overwatch "
-                                              "client resolution. This version currently does not support this "
-                                              "feature.")
+                                              "client resolution. This version does not support this "
+                                              "feature at this time.")
 
     async def format_commands(self):
         # Format the commands in a message.

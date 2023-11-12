@@ -2,6 +2,8 @@ from flask import Flask, jsonify
 
 app = Flask(__name__)
 
+patch_available = False
+
 region_resolution_options = {
     "queue_region_big_1920x1080": {
         "x": 750,
@@ -451,6 +453,11 @@ def get_coordinates_resolution_options():
 @app.route('/api/screen/region_options', methods=['GET'])
 def get_region_resolution_options():
     return jsonify(region_resolution_options)
+
+
+@app.route('/api/patch', methods=['GET'])
+def get_region_resolution_options():
+    return jsonify(patch_available)
 
 
 if __name__ == '__main__':
