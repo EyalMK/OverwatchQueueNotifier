@@ -50,6 +50,9 @@ class DiscordBot(discord.Client):
         if message.author == self.user:
             return
 
+        if not message.content.startswith('!'):
+            return
+
         user_id = str(message.author.id)
         clients = self.server.get_connected_clients()
 
@@ -78,7 +81,7 @@ class DiscordBot(discord.Client):
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
                         print(f'Socket not found. Error: {e}')
             else:
-                await message.author.send(f'Connection failed. No valid connection requested.')
+                await message.author.send(f"You're not connected and cannot communicate with the Overwatch Queue Notifier at this time.")
 
         if user_id in clients:
             client_socket = clients[user_id].get_socket()
@@ -129,9 +132,6 @@ class DiscordBot(discord.Client):
                     await restart_server()
                 elif message.content == '!admin-connections':
                     await self.get_number_active_connections(message.guild.owner)
-        else:
-            await message.author.send(
-                "You're not connected and cannot communicate with the Overwatch Queue Notifier at this time.")
 
     async def send_user_message(self, user_id, message):
         user = self.get_user(int(user_id))
