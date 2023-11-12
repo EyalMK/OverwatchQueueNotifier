@@ -456,7 +456,7 @@ def get_region_resolution_options():
 
 
 @app.route('/api/patch', methods=['GET'])
-def get_region_resolution_options():
+def get_patch_status():
     return jsonify(patch_available)
 
 
