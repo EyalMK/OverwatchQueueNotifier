@@ -3,6 +3,7 @@ import tkinter as tk
 import webbrowser
 from ctypes import windll, byref, sizeof, c_int
 
+import requests
 from customtkinter import *
 
 from game_info import game_data
@@ -12,6 +13,18 @@ if getattr(sys, 'frozen', False):
     favicon_path = os.path.join(sys._MEIPASS, './assets/images/favicon.ico')  # Client path
 
 
+def get_patch_status():
+    try:
+        response = requests.get('https://overnotifier.com/api/patch')
+        response.raise_for_status()
+        if response.json():
+            return "There is an update available. Download the new client from the website."
+        return ""
+    except requests.RequestException as e:
+        print(f'Error fetching : {e}')
+        return ""
+
+
 def open_discord_invite():
     # Open the link in the default web browser
     webbrowser.open('https://discord.gg/nzgwsvtzXW')
@@ -19,10 +32,10 @@ def open_discord_invite():
 
 class ClientScreen:
     def __init__(self, main_app):
-        self.width = 900
-        self.height = 500
         self.main_app = main_app
         self.window = tk.Tk()
+        self.width = 900
+        self.height = 500
         self.id_var = tk.StringVar()
         self.wait_var = tk.StringVar()
         self.response_var = tk.StringVar()
@@ -35,6 +48,7 @@ class ClientScreen:
         self.default_dps = tk.StringVar()
         self.default_support = tk.StringVar()
         self.remember_var = tk.BooleanVar(value=False)  # Default value is False
+        self.live_patch_var = tk.StringVar(value=get_patch_status())
         self.load_saved_settings()
         self.build_popup_ui()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)  # To terminate the socket connection through the
@@ -152,7 +166,8 @@ class ClientScreen:
                                   f'the Discord server. {e}')
 
     def disconnect(self):
-        if self.queue_watcher_var.get() not in ['Queue Watcher is running: Looking for Overwatch...', 'Queue Watcher is not running.']:
+        if self.queue_watcher_var.get() not in ['Queue Watcher is running: Looking for Overwatch...',
+                                                'Queue Watcher is not running.']:
             self.response_var.set('Cannot disconnect while Overwatch is active. Exit client or Overwatch.')
             return
 
@@ -188,6 +203,16 @@ class ClientScreen:
 
     def build_popup_ui(self):
         self.window.title('Overwatch Queue Notifier')
+
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
+        standard_width = 900
+        standard_height = 500
+        scale_width = standard_width / screen_width
+        scale_height = standard_height / screen_height
+        self.width = int(screen_width * scale_width)
+        self.height = int(screen_height * scale_height)
+
         self.window.geometry(f'{self.width}x{self.height}')
         self.window.resizable(False, False)
         self.window.configure(bg='#2a2b2e')  # Overwatch 2 dark theme background color
@@ -244,8 +269,7 @@ class ClientScreen:
 
         # Status Messages
         wait_label = CTkLabel(self.window, textvariable=self.wait_var, font=('Montserrat Regular', 16))
-        response_label = CTkLabel(self.window, textvariable=self.response_var, font=('Montserrat Regular', 16),
-                                  bg_color='#2a2b2e')
+        response_label = CTkLabel(self.window, textvariable=self.response_var, font=('Montserrat Regular', 16))
         wait_label.pack()
         response_label.pack()
 
@@ -316,6 +340,9 @@ class ClientScreen:
                                           values=support_hero_choices, command=self.clear_hero_selection,
                                           **custom_style, button_color='#555555')
         support_hero_menu.pack(side='left', padx=10)
+
+        live_patch_label = CTkLabel(self.window, textvariable=self.live_patch_var, font=('Montserrat Regular', 16), text_color='#1C9000')
+        live_patch_label.pack(side='top', pady=10)
 
     def show(self):
         self.window.mainloop()

@@ -9,7 +9,7 @@ def fetch_data(api_url):
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
-        print(f'Error fetching game info: {e}')
+        print(f'Error fetching screen capture info: {e}')
         return None
 
 
