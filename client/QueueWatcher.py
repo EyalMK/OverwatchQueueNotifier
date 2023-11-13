@@ -378,7 +378,7 @@ class QueueWatcher(Thread):
 
                 # If more than a certain percentage of the image is orange,
                 # consider it an available button
-                return percentage_orange > 50  # 50 Threshold was deemed appropriate, considering some backgrounds are
+                return percentage_orange > 60  # 60 Threshold was deemed appropriate, considering some backgrounds are
                 # orange and the button is actually transparent...
             except Exception as e:
                 print(f'Error on checking if hero is selectable - {e}')

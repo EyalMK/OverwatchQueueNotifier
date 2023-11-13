@@ -42,7 +42,7 @@ jobs:
             IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/overwatchqueuenotifier:latest"
             
             # Stop and remove all containers using the image
-            docker ps -a --filter ancestor="$IMAGE_NAME" | xargs -r docker stop | xargs -r docker rm
+            docker ps -aq --filter ancestor="$IMAGE_NAME" | xargs -r docker stop | xargs -r docker rm
             
             # Remove the old image
             docker rmi "$IMAGE_NAME" || true
@@ -76,7 +76,7 @@ jobs:
             IMAGE_NAME_API="${{ secrets.DOCKER_USERNAME }}/overwatchnotifier-api:latest"
             
             # Stop and remove all containers using the API image
-            docker ps -a --filter ancestor="$IMAGE_NAME_API" | xargs -r docker stop | xargs -r docker rm
+            docker ps -aq --filter ancestor="$IMAGE_NAME_API" | xargs -r docker stop | xargs -r docker rm
             
             # Remove the old API image
             docker rmi "$IMAGE_NAME_API" || true
