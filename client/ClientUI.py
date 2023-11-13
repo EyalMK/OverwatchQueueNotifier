@@ -122,13 +122,31 @@ class ClientScreen:
         with open(config_path, 'w') as configfile:
             config.write(configfile)
 
+    def set_default_heroes(self):
+        tank = self.default_tank.get()
+        dps = self.default_dps.get()
+        support = self.default_support.get()
+
+        if tank != 'Choose Hero':
+            self.main_app.client_handler.set_default_tank(tank)
+        if dps != 'Choose Hero':
+            self.main_app.client_handler.set_default_dps(dps)
+        if support != 'Choose Hero':
+            self.main_app.client_handler.set_default_support(support)
+
     def clear_hero_selection(self, val):
-        if self.default_dps.get() == 'Clear':
+        tank = self.default_tank.get()
+        dps = self.default_dps.get()
+        support = self.default_support.get()
+
+        if dps == 'Clear':
             self.default_dps.set('Choose Hero')
-        elif self.default_support.get() == 'Clear':
+        elif support == 'Clear':
             self.default_support.set('Choose Hero')
-        elif self.default_tank.get() == 'Clear':
+        elif tank == 'Clear':
             self.default_tank.set('Choose Hero')
+
+        self.set_default_heroes()
 
     def submit(self):
         username = self.id_var.get()
@@ -155,12 +173,7 @@ class ClientScreen:
                 self.save_username()
 
             self.save_heroes(tank, dps, support)
-            if tank != 'Choose Hero':
-                self.main_app.client_handler.set_default_tank(tank)
-            if dps != 'Choose Hero':
-                self.main_app.client_handler.set_default_dps(dps)
-            if support != 'Choose Hero':
-                self.main_app.client_handler.set_default_support(support)
+            self.set_default_heroes()
         except Exception as e:
             self.response_var.set('Failed to connect. Please enter a valid Discord username, and ensure you are in '
                                   f'the Discord server. {e}')
