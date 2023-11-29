@@ -272,7 +272,7 @@ tanks = {
     "Winston": ["Winston", "winston", "monkey", "winton", "Winton"],
     "Wrecking Ball": ["Wrecking Ball", "wrecking ball", "Ball", "ball", "hamster", "Hamster", "Hammond", "hammond"],
     "Zarya": ["Zarya", "zarya"],
-    # "Mauga": ["Mauga", "mauga", "mau", "Mau"]
+    "Mauga": ["Mauga", "mauga", "mau", "Mau"]
 }
 
 dps = {
@@ -313,18 +313,16 @@ heroes_coordinates_1920x1080 = {
     "D.Va": [250, 830],
     "Doomfist": [320, 830],
     "Junker Queen": [370, 830],
-    "Orisa": [440, 830],
-    "Ramattra": [500, 830],
-    "Reinhardt": [570, 830],
+    "Mauga": [440, 830],
+    "Orisa": [500, 830],
+    "Ramattra": [570, 830],
+    "Reinhardt": [250, 890],
     "Roadhog": [320, 890],
     "Sigma": [370, 890],
     "Winston": [440, 890],
     "Wrecking Ball": [500, 890],
     "Zarya": [570, 890],
-    # "Mauga": [440, 830],
-    # "Orisa": [500, 830],
-    # "Ramattra": [570, 830],
-    # "Reinhardt": [250, 890],
+
 
     # Dps'
     "Ashe": [740, 830],

@@ -77,7 +77,6 @@ class DiscordBot(discord.Client):
                         print(f'Active connections: {len(new_clients)}')
                     except OSError as e:
                         self.server.remove_client(awaiting_connections[user_id])
-                        self.server.remove_client(clients[user_id])
                         await message.author.send(f'Client is not connected to server. Restart client and try again!')
                         print(f'Socket not found. Error: {e}')
             else:
