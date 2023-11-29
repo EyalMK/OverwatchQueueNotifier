@@ -144,8 +144,7 @@ class QueueWatcher(Thread):
         # Bring Overwatch to the foreground (active window).
         self.set_overwatch_active_window()
 
-        # Call self.queue_watcher() method, which starts taking screenshots of Overwatch window, and checking if at
-        # the top middle of the screen, there is a red bar containing the words "Competitive" and a timer
+        # Start the queue detector.
         queue_detector_thread = Thread(target=self.run_queue_watcher)
         queue_detector_thread.setDaemon(True)
         queue_detector_thread.start()
@@ -694,9 +693,6 @@ class QueueWatcher(Thread):
                 self.game_finished_event = Event()
                 self.is_game_finished()
                 self.game_finished_event.wait()  # Wait for the event to finish (one of the threads to spot end game).
-
-                if not self.running.is_set():
-                    break
 
                 # Reset phases, flags and trigger client_handler game finished event.
                 self.active_queue_phases[0] = self.active_queue_phases[1] = False
