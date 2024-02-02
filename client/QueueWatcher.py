@@ -14,8 +14,8 @@ import win32gui
 import win32ui
 from PIL import Image
 
-from game_info import get_map_key, get_hero_coordinates
-from screen_capture import screen_capture_data
+from GameInfo import get_map_key, get_hero_coordinates
+from ScreenCapture import screen_capture_data
 
 _path = r'C:/Program Files/Tesseract-OCR/tesseract.exe'  # Dev env default path
 if getattr(sys, 'frozen', False):

@@ -6,7 +6,7 @@ from ctypes import windll, byref, sizeof, c_int
 import requests
 from customtkinter import *
 
-from game_info import game_data
+from GameInfo import game_data
 
 favicon_path = os.getcwd() + '\\assets\\images\\favicon.ico'  # Dev env default path
 if getattr(sys, 'frozen', False):

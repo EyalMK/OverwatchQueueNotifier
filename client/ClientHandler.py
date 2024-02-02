@@ -5,8 +5,8 @@ from threading import Thread
 import psutil
 from plyer import notification
 
+from GameInfo import get_hero_key, game_data
 from QueueWatcher import QueueWatcher
-from game_info import get_hero_key, game_data
 
 favicon_path = os.getcwd() + '\\assets\\images\\favicon.ico'  # Dev env default path
 if getattr(sys, 'frozen', False):
