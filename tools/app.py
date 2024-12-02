@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, jsonify
 
 app = Flask(__name__)
@@ -258,56 +259,6 @@ coordinates_resolution_options = {
     },
 }
 
-
-# Heroes
-tanks = {
-    "D.Va": ["D.Va", "d.va", "dva", "Dva"],
-    "Doomfist": ["Doom", "doom", "DF", "df", "doomfist", "Doomfist"],
-    "Junker Queen": ["Junker Queen", "JQ", "Queen", "queen", "junker", "jq"],
-    "Orisa": ["orisa", "Orisa", "horse"],
-    "Ramattra": ["Ramattra", "Ram", "ram"],
-    "Reinhardt": ["Reinhardt", "Rein", "rein"],
-    "Roadhog": ["Roadhog", "road", "hog", "Hog"],
-    "Sigma": ["Sigma", "sigma", "sig", "Sig"],
-    "Winston": ["Winston", "winston", "monkey", "winton", "Winton"],
-    "Wrecking Ball": ["Wrecking Ball", "wrecking ball", "Ball", "ball", "hamster", "Hamster", "Hammond", "hammond"],
-    "Zarya": ["Zarya", "zarya"],
-    "Mauga": ["Mauga", "mauga", "mau", "Mau"]
-}
-
-dps = {
-    "Ashe": ["Ashe", "ashe"],
-    "Bastion": ["Bastion", "bastion", "bast", "Bast"],
-    "Cassidy": ["Cassidy", "cassidy", "Cree", "cree", "cass", "Cass"],
-    "Echo": ["Echo", "echo"],
-    "Genji": ["Genji", "genji", "genju"],
-    "Hanzo": ["Hanzo", "hanzo"],
-    "Junkrat": ["Junkrat", "junkrat", "Junk", "junk"],
-    "Mei": ["Mei", "mei", "the devil"],
-    "Pharah": ["Pharah", "pharah", "phara", "Phara"],
-    "Reaper": ["Reaper", "reaper", "reap"],
-    "Sojourn": ["Sojourn", "sojourn", "Soj", "soj"],
-    "Soldier: 76": ["Soldier: 76", "soldier: 76", "Soldier", "soldier", "sold", "Sold", "legs", "Legs"],
-    "Sombra": ["Sombra", "sombra", "somb"],
-    "Symmetra": ["Symmetra", "symmetra", "sym", "Symetra", "symetra"],
-    "Torbjorn": ["Torbjorn", "torbjorn", "Torb", "torb"],
-    "Tracer": ["Tracer", "tracer", "tr"],
-    "Widowmaker": ["Widowmaker", "widowmaker", "Widow", "widow"]
-}
-
-supports = {
-    "Ana": ["Ana", "ana"],
-    "Baptiste": ["Baptiste", "baptiste", "bap", "Bap"],
-    "Brigette": ["Brigette", "brigette", "brig", "Brig"],
-    "Illari": ["Illari", "illari"],
-    "Kiriko": ["Kiriko", "kiriko", "Kiri", "kiri"],
-    "Lifeweaver": ["Lifeweaver", "lifeweaver", "life", "Life", "Weaver", "weaver", "wifeleaver", "Wifeleaver"],
-    "Lucio": ["Lucio", "lucio"],
-    "Mercy": ["Mercy", "mercy"],
-    "Moira": ["Moira", "moira"],
-    "Zenyatta": ["Zenyatta", "zenyatta", "Zen", "zen"]
-}
-
 heroes_coordinates_1920x1080 = {
     # Tanks
     "D.Va": [250, 830],
@@ -322,7 +273,6 @@ heroes_coordinates_1920x1080 = {
     "Winston": [440, 890],
     "Wrecking Ball": [500, 890],
     "Zarya": [570, 890],
-
 
     # Dps'
     "Ashe": [740, 830],
@@ -359,101 +309,68 @@ heroes_coordinates_1920x1080 = {
 heroes_coordinates_2560x1440 = {hero: [int(coord[0] * 4 / 3), int(coord[1] * 4 / 3)] for hero, coord in
                                 heroes_coordinates_1920x1080.items()}
 
-maps = {
-    # Escort
-    "Dorado": ["dorado", "dor", "ado", "rado", "orado", "orad"],
-    "Junkertown": ["junkertown", "junker", "junkt", "town", "ertown", "unker"],
-    "Rialto": ["rialto", "ial", "rial", "alto"],
-    "Route 66": ["route", "route 66", "66"],
-    "Watchpoint: Gibraltar": ["watchpoint", "watchpoint:", "gibraltar", "watchpoint: gibraltar", "watch", "gibra",
-                              "gibralt", "gibral",
-                              "point", "gibralta"],
-    "Circuit Royal": ["circuit royal", "circuit", "royal"],
-    "Havana": ["havana"],
-    "Shambali Monastery": ["shambali monastery", "shambali", "shamba", "shambal", "monastery", "monast", "monas"],
 
-    # Hybrid
-    "Blizzard World": ["blizzard world", "blizzard", "world", "blizz", "blizzar", "blizza"],
-    "Eichenwalde": ["eichenwalde", "eichen", "eich", "wald", "walde"],
-    "Hollywood": ["hollywood", "holly", "wood"],
-    "King's Row": ["king's row", "kings row", "king's", "kings", "row", "king"],
-    "Numbani": ["numbani", "numb", "ani"],
-    "Adlersbrunn": ["adlersbrunn", "adlers", "brunn"],
-    "Paraiso": ["paraiso", "para", "iso"],
-    "Midtown": ["midtown", "mid", "town"],
-
-    # Control
-    "Antarctic Peninsula": ["antarctic peninsula", "ant", "antar", "antarctic", "peninsula", "penin", "sula",
-                            "arctic"],
-    "Busan": ["busan", "bus", "busa", "downtown", "meka base", "meka", "base", "sanctuary"],
-    "Ilios": ["ilios", "ili", "ios", "lighthouse", "house", "light", "well", "ruins"],
-    "Lijiang Tower": ["lijiang tower", "lijiang", "tower", "lij", "jiang", "iang", "ijiang", "control", "center",
-                      "control cent", "garden", "night market", "night", "market"],
-    "Nepal": ["nepal", "village", "shrine", "sanctum"],
-    "Oasis": ["oasis", "city center", "city", "gardens", "university"],
-    "Samoa": ["samoa", "volcano", "beach"],
-
-    # Push
-    "Colosseo": ["colosseo", "colo", "sseo"],
-    "Esperanca": ["esperanca", "esper", "anca", "esperanga"],
-    "New Queen Street": ["new queen street", "new queen", "queen", "street"],
-
-    # Flashpoint
-    "New Junk City": ["new junk city", "new junk", "junk", "junk city", "city"],
-    "Suravasa": ["suravasa", "sura", "vasa", "surava"],
-
-    # Clash
-    "Hanaoka": ["hanaoka", "hana", "oka"],
-}
+def fetch_json(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
+        data = response.json()
+        return data
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except requests.exceptions.RequestException as req_err:
+        print(f"Request error occurred: {req_err}")
+    except ValueError as json_err:
+        print(f"JSON decode error: {json_err}")
 
 
-@app.route('/api/maps', methods=['GET'])
+base_path = "/api/v1"
+overfast_api = "https://overfast-api.tekrop.fr/maps"
+
+
+@app.route(f"{base_path}/maps", methods=['GET'])
 def get_maps():
-    return jsonify(maps)
+    unfiltered_maps = fetch_json(f"{overfast_api}/maps")
+    # Competitive/Quick Play maps are unique to a single game-mode only. The rest are custom and arcade maps.
+    non_arcade_maps = [entry["name"] for entry in unfiltered_maps if len(entry["gamemode"]) == 1]
+    return jsonify(non_arcade_maps)
 
 
-@app.route('/api/heroes/', methods=['GET'])
+@app.route(f"{base_path}/heroes/", methods=['GET'])
 def get_all_heroes():
-    heroes = [item for hero in [tanks, dps, supports] for values in hero.values() for item in values]
+    heroes = [entry["name"] for entry in fetch_json(f"{overfast_api}/heroes?locale=en-us")]
     return jsonify(heroes)
 
 
-@app.route('/api/heroes/tanks', methods=['GET'])
-def get_tank_heroes():
-    return jsonify(tanks)
+@app.route(f"{base_path}/heroes/<role>", methods=['GET'])
+def get_heroes_by_role(role):
+    if role not in ["tank", "dps", "support"]:
+        return jsonify({"message": "Invalid role specified"})
+    heroes = [entry["name"] for entry in fetch_json(f"{overfast_api}/heroes?role={role}&locale=en-us")]
+    return jsonify(heroes)
 
 
-@app.route('/api/heroes/dps', methods=['GET'])
-def get_dps_heroes():
-    return jsonify(dps)
-
-
-@app.route('/api/heroes/supports', methods=['GET'])
-def get_support_heroes():
-    return jsonify(supports)
-
-
-@app.route('/api/heroes/coordinates_1920x1080', methods=['GET'])
+@app.route(f"{base_path}/heroes/coordinates_1920x1080", methods=['GET'])
 def get_heroes_coordinates_1920x1080():
     return jsonify(heroes_coordinates_1920x1080)
 
 
-@app.route('/api/heroes/coordinates_2560x1440', methods=['GET'])
+@app.route(f"{base_path}/heroes/coordinates_2560x1440", methods=['GET'])
 def get_heroes_coordinates_2560x1440():
     return jsonify(heroes_coordinates_2560x1440)
 
 
-@app.route('/api/screen/coordinates_options', methods=['GET'])
+@app.route(f"{base_path}/screen/coordinates_options", methods=['GET'])
 def get_coordinates_resolution_options():
     return jsonify(coordinates_resolution_options)
 
 
-@app.route('/api/screen/region_options', methods=['GET'])
+@app.route(f"{base_path}/screen/region_options", methods=['GET'])
 def get_region_resolution_options():
     return jsonify(region_resolution_options)
 
 
-@app.route('/api/patch', methods=['GET'])
+@app.route(f"{base_path}/patch", methods=['GET'])
 def get_patch_status():
     return jsonify(patch_available)
 

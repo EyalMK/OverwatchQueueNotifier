@@ -3,3 +3,5 @@ playground/
 client/*.pyw
 client/UI_Files/
 tools/alt_active.py
+venv/*
+.idea

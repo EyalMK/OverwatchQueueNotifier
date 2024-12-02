@@ -6,9 +6,7 @@ from ctypes import windll, byref, sizeof, c_int
 import requests
 from customtkinter import *
 
-from GameInfo import game_data
-
-favicon_path = os.getcwd() + '\\assets\\images\\favicon.ico'  # Dev env default path
+favicon_path = os.getcwd() + '\\..\\assets\\images\\favicon.ico'  # Dev env default path
 if getattr(sys, 'frozen', False):
     favicon_path = os.path.join(sys._MEIPASS, './assets/images/favicon.ico')  # Client path
 
@@ -48,7 +46,8 @@ class ClientScreen:
         self.default_dps = tk.StringVar()
         self.default_support = tk.StringVar()
         self.remember_var = tk.BooleanVar(value=False)  # Default value is False
-        self.live_patch_var = tk.StringVar(value=get_patch_status())
+        # self.live_patch_var = tk.StringVar(value=get_patch_status())
+        self.live_patch_var = tk.StringVar(value="false")
         self.load_saved_settings()
         self.build_popup_ui()
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)  # To terminate the socket connection through the
@@ -146,7 +145,7 @@ class ClientScreen:
         elif tank == 'Clear':
             self.default_tank.set('Choose Hero')
 
-        self.set_default_heroes()
+        # self.set_default_heroes()
 
     def submit(self):
         username = self.id_var.get()
@@ -173,7 +172,7 @@ class ClientScreen:
                 self.save_username()
 
             self.save_heroes(tank, dps, support)
-            self.set_default_heroes()
+            # self.set_default_heroes()
         except Exception as e:
             self.response_var.set('Failed to connect. Please enter a valid Discord username, and ensure you are in '
                                   f'the Discord server. {e}')
@@ -325,7 +324,8 @@ class ClientScreen:
         tank_hero_frame.pack(side='left', expand=True, fill='both', padx=5)
         tank_hero_label = CTkLabel(tank_hero_frame, text="Tank Hero", **custom_style, font=('Montserrat Regular', 12))
         tank_hero_label.pack(side='left')
-        tank_hero_choices = ['Clear'] + list(game_data['tanks'].keys())
+        # tank_hero_choices = ['Clear'] + list(game_data['tanks'].keys())
+        tank_hero_choices = ['Clear']
         tank_hero_menu = CTkOptionMenu(tank_hero_frame, variable=self.default_tank, values=tank_hero_choices,
                                        command=self.clear_hero_selection,
                                        **custom_style, button_color='#555555')
@@ -336,7 +336,8 @@ class ClientScreen:
         dps_hero_frame.pack(side='left', expand=True, fill='both', padx=5)
         dps_hero_label = CTkLabel(dps_hero_frame, text="DPS Hero", **custom_style, font=('Montserrat Regular', 12))
         dps_hero_label.pack(side='left', padx=5)
-        dps_hero_choices = ['Clear'] + list(game_data['dps'].keys())
+        # dps_hero_choices = ['Clear'] + list(game_data['dps'].keys())
+        dps_hero_choices = ['Clear']
         dps_hero_menu = CTkOptionMenu(dps_hero_frame, variable=self.default_dps, values=dps_hero_choices,
                                       command=self.clear_hero_selection,
                                       **custom_style, button_color='#555555')
@@ -348,7 +349,8 @@ class ClientScreen:
         support_hero_label = CTkLabel(support_hero_frame, text="Support Hero", **custom_style,
                                       font=('Montserrat Regular', 12))
         support_hero_label.pack(side='left', padx=5)
-        support_hero_choices = ['Clear'] + list(game_data['supports'].keys())
+        # support_hero_choices = ['Clear'] + list(game_data['supports'].keys())
+        support_hero_choices = ['Clear']
         support_hero_menu = CTkOptionMenu(support_hero_frame, variable=self.default_support,
                                           values=support_hero_choices, command=self.clear_hero_selection,
                                           **custom_style, button_color='#555555')
@@ -365,3 +367,8 @@ class ClientScreen:
         self.main_app.client_handler.send_disconnect()
         self.main_app.client_handler.close_connection()
         self.window.destroy()
+
+
+if __name__ == '__main__':
+    client = ClientScreen(None)
+    client.show()
