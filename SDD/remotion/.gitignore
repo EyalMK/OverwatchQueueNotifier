@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production
+dist/
+build/
+.next/
+out/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Remotion-specific
+.remotion/
+.vercel/
+remotion_render_tmp/
+output.mp4
+output-short.mp4
+output-dev.mp4
+video.mp4
+video-short.mp4
+video-dev.mp4
+
+# Cache
+.cache/
+*.cache

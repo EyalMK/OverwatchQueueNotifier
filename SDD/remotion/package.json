@@ -1,0 +1,23 @@
+{
+  "name": "overwatch-queue-notifier-video",
+  "version": "1.0.0",
+  "description": "90-second Remotion video for Overwatch Queue Notifier project",
+  "scripts": {
+    "start": "remotion studio",
+    "build": "remotion render src/Composition.tsx video.mp4",
+    "build:short": "remotion render src/Composition.tsx video-short.mp4 --props '{\"version\": \"short\"}'",
+    "build:dev": "remotion render src/Composition.tsx video-dev.mp4 --props '{\"version\": \"developer\"}'",
+    "preview": "remotion studio"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@types/react": "^18.2.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
