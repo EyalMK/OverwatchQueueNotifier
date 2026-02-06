@@ -45,6 +45,21 @@ Notes:
 - SETUP-004: Added GitHub Actions workflow `test.yml` (ruff lint, frontend type-check, backend tests, frontend build).
 - SETUP-008: Added `docs/onboarding.md` with 5-minute bootstrap.
 - SETUP-006: Added `frontend/src/styles/design-tokens.json` generated from `SDD/specs/10_ui_designer.md`.
+- Sprint-0 prompt alignment: Implemented repository layer + unit tests in `backend/src/state/repository.py` and `backend/tests/unit/test_repository.py`.
+- Sprint-0 prompt alignment: MCP server endpoints now validate inputs and enforce rate limits in `backend/src/mcp/server.py`.
+- Sprint-0 prompt alignment: Backend entrypoint now supports `--dev` to run MCP server after migrations in `backend/src/main.py`.
+- Sprint-0 prompt alignment: Gate heuristics implemented with unit tests in `backend/src/perception/gate.py` and `backend/tests/unit/test_gate.py`.
+- Sprint-0 prompt alignment: Screen capture service stub + tests added in `backend/src/perception/screen_capture.py` and `backend/tests/unit/test_screen_capture.py`.
+- Sprint-0 prompt alignment: Classifier skeleton + tests added in `backend/src/perception/classifier.py` and `backend/tests/unit/test_classifier.py`.
+- Sprint-0 prompt alignment: MCP perceive_state now wired to capture + gate + classifier logic with caching in `backend/src/mcp/server.py`.
+- Sprint-0 prompt alignment: MCP capture_regions now performs real crop + base64 encoding in `backend/src/mcp/server.py`.
+- Sprint-0 prompt alignment: Frontend tray UI + settings modal + Zustand store scaffolded in `frontend/src/pages/TrayWindow.tsx`, `frontend/src/components/SettingsModal.tsx`, and `frontend/src/store/gameStore.ts`.
+- Sprint-0 prompt alignment: Added Vitest setup and store tests in `frontend/vitest.config.ts` and `frontend/src/store/gameStore.test.ts`.
+- Sprint-0 prompt alignment: IPC bridge stub + polling added in `frontend/src/lib/ipc.ts` and `frontend/src/store/gameStore.ts`.
+- Sprint-0 prompt alignment: Added root docs `README.md` and `CONTRIBUTING.md`.
+- Sprint-0 prompt alignment: Added backend `pytest.ini`.
+- Sprint-0 prompt alignment: Calibration profile loading + optional notification logging added in `backend/src/mcp/server.py`.
+- Sprint-0 prompt alignment: Added MCP integration tests in `backend/tests/integration/test_mcp_tools.py`.
 
 ---
 
