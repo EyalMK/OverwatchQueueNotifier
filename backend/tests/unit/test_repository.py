@@ -52,13 +52,16 @@ def test_detection_repository_inserts_detection(temp_db: str) -> None:
         "QUEUE",
         0.87,
         {"resolution": "1920x1080", "gate_triggered": True},
+        escalated=True,
+        evidence_image_base64="abc123",
+        window_resolution="1920x1080",
     )
 
     conn = sqlite3.connect(temp_db)
     conn.row_factory = sqlite3.Row
     row = _fetchone(
         conn,
-        "SELECT id, state, confidence, resolution FROM detection_history WHERE id = ?",
+        "SELECT id, state, confidence, resolution, escalated, window_resolution FROM detection_history WHERE id = ?",
         (detection_id,),
     )
     conn.close()
@@ -66,6 +69,8 @@ def test_detection_repository_inserts_detection(temp_db: str) -> None:
     assert row is not None
     assert row["state"] == "QUEUE"
     assert row["resolution"] == "1920x1080"
+    assert row["escalated"] == 1
+    assert row["window_resolution"] == "1920x1080"
     assert pytest.approx(row["confidence"], rel=1e-6) == 0.87
 
 
@@ -108,3 +113,20 @@ def test_settings_repository_reads_value(temp_db: str) -> None:
 
     repo = SettingsRepository(temp_db)
     assert repo.get("notification_sound_enabled") == "true"
+
+
+def test_detection_cleanup_removes_old_records(temp_db: str) -> None:
+    run_migrations(temp_db)
+    repo = DetectionRepository(temp_db)
+    detection_id = repo.insert("IDLE", 0.99, {"resolution": "1920x1080"})
+
+    conn = sqlite3.connect(temp_db)
+    conn.execute(
+        "UPDATE detection_history SET timestamp = datetime('now', '-2 days') WHERE id = ?",
+        (detection_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    removed = repo.cleanup_older_than(hours=24)
+    assert removed >= 1

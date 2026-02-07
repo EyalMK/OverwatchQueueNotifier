@@ -7,6 +7,11 @@ from src.mcp.server import create_app
 
 
 def test_perceive_state_success(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.mcp.server.ClassifierService.classify_with_escalation",
+        lambda _self, _frame: ("QUEUE", 0.93, False),
+        raising=True,
+    )
     app = create_app()
 
     def _capture(_self):
@@ -21,7 +26,7 @@ def test_perceive_state_success(monkeypatch) -> None:
     client = TestClient(app)
     response = client.post(
         "/mcp/tools/screen.perceive_state",
-        json={"timestamp": "2026-02-06T12:00:00Z", "resolution": "1920x1080"},
+        json={"resolution": "1920x1080", "check_escalation": True},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -68,8 +73,8 @@ def test_notify_endpoints_success() -> None:
         "/mcp/tools/notify.desktop",
         json={
             "title": "MATCH FOUND!",
-            "body": "Test",
-            "urgency": "high",
+            "message": "Test",
+            "urgency": "critical",
             "sound": True,
         },
     )

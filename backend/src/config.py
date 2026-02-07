@@ -7,6 +7,27 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+CLASSIFIER_CONFIG = {
+    "tiny_model_path": "backend/models/Shufflenet-v2.onnx",
+    "escalation_model_path": "backend/models/efficientnet-lite4-11.onnx",
+    "input_dim": (224, 224),
+    "escalation_threshold": 0.85,
+    "class_names": [
+        "IDLE",
+        "QUEUE",
+        "MATCH_FOUND",
+        "IN_GAME",
+        "LOADING",
+        "HERO_SELECT",
+    ],
+}
+
+GATE_THRESHOLDS = {
+    (1920, 1080): (5.0, 0.30),
+    (2560, 1440): (3.0, 0.30),
+    (3440, 1440): (2.0, 0.30),
+}
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -51,7 +72,10 @@ def load_config(env_path: Optional[str] = None) -> AppConfig:
         overwatch_window_title=os.getenv("OVERWATCH_WINDOW_TITLE", "Overwatch 2"),
         gate_pixel_diff_threshold_pct=_get_float("GATE_PIXEL_DIFF_THRESHOLD_PCT", 15.0),
         gate_histogram_threshold=_get_float("GATE_HISTOGRAM_THRESHOLD", 0.5),
-        escalation_confidence_threshold=_get_float("ESCALATION_CONFIDENCE_THRESHOLD", 0.85),
+        escalation_confidence_threshold=_get_float(
+            "ESCALATION_CONFIDENCE_THRESHOLD",
+            float(CLASSIFIER_CONFIG["escalation_threshold"]),
+        ),
         screen_capture_interval_ms=_get_int("SCREEN_CAPTURE_INTERVAL_MS", 500),
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
     )

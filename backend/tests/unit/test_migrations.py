@@ -22,3 +22,10 @@ def test_run_migrations_creates_schema(temp_db: str) -> None:
     assert "detection_history" in tables
     assert "notification_log" in tables
     assert "settings" in tables
+
+    conn = sqlite3.connect(temp_db)
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(detection_history)").fetchall()]
+    conn.close()
+    assert "escalated" in cols
+    assert "evidence_image_base64" in cols
+    assert "window_resolution" in cols

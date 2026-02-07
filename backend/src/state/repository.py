@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 
@@ -80,28 +81,65 @@ class DetectionRepository:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
 
-    def insert(self, state: str, confidence: float, evidence: Any) -> int:
+    def insert(
+        self,
+        state: str,
+        confidence: float,
+        evidence: Any,
+        escalated: bool = False,
+        evidence_image_base64: Optional[str] = None,
+        window_resolution: Optional[str] = None,
+    ) -> int:
         if state not in _ALLOWED_STATES:
             raise DatabaseError(f"Invalid state: {state}")
         if not 0.0 <= confidence <= 1.0:
             raise DatabaseError("Confidence must be between 0.0 and 1.0.")
 
         resolution, evidence_json = _normalize_evidence(evidence)
+        final_resolution = window_resolution or resolution
 
         conn = _connect(self.db_path)
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO detection_history (state, confidence, resolution, evidence_json)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO detection_history (
+                    state, confidence, resolution, evidence_json,
+                    escalated, evidence_image_base64, window_resolution
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (state, confidence, resolution, evidence_json),
+                (
+                    state,
+                    confidence,
+                    resolution,
+                    evidence_json,
+                    int(escalated),
+                    evidence_image_base64,
+                    final_resolution,
+                ),
             )
             conn.commit()
             return int(cursor.lastrowid)
         except sqlite3.IntegrityError as exc:
             conn.rollback()
             raise IntegrityError(str(exc)) from exc
+        except sqlite3.Error as exc:
+            conn.rollback()
+            raise DatabaseError(str(exc)) from exc
+        finally:
+            conn.close()
+
+    def cleanup_older_than(self, hours: int = 24) -> int:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S")
+        conn = _connect(self.db_path)
+        try:
+            cursor = conn.execute(
+                "DELETE FROM detection_history WHERE timestamp < ?",
+                (cutoff_str,),
+            )
+            conn.commit()
+            return int(cursor.rowcount)
         except sqlite3.Error as exc:
             conn.rollback()
             raise DatabaseError(str(exc)) from exc

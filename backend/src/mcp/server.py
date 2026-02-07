@@ -1,26 +1,28 @@
 from __future__ import annotations
 
-from collections import deque
+import base64
+import json
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from io import BytesIO
-from time import monotonic, perf_counter
-from typing import Deque, List, Literal, Optional, Tuple
+from time import monotonic
+from typing import Deque, Dict, List, Literal, Optional, Tuple
 
-import uvicorn
-import base64
-import json
 import numpy as np
-from PIL import Image
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from PIL import Image
 from pydantic import BaseModel, Field, HttpUrl, conlist
 
 from ..config import load_config
-from ..errors import WindowNotFoundError
+from ..db.migrations import run_migrations
+from ..errors import AIInferenceError, WindowNotFoundError
 from ..perception import ClassifierService, GateService, ScreenCaptureService
-from ..state.repository import CalibrationRepository, NotificationRepository
+from ..state.repository import CalibrationRepository, DetectionRepository, NotificationRepository
+from ..state.state_machine import StateMachine
 
 GameState = Literal[
     "IDLE",
@@ -29,28 +31,24 @@ GameState = Literal[
     "HERO_SELECT",
     "LOADING",
     "IN_GAME",
-    "UNKNOWN",
 ]
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-class ErrorResponse(BaseModel):
-    error: str
-    error_code: str
-    message: str
-    timestamp: str
-    retry_after_ms: Optional[int] = None
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 @dataclass
 class MCPError(Exception):
     message: str
     error: str
-    error_code: str
     http_status: int
+    retry_after_ms: Optional[int] = None
+
+
+class ErrorResponse(BaseModel):
+    error: str
+    message: str
     retry_after_ms: Optional[int] = None
 
 
@@ -58,162 +56,33 @@ class RateLimiter:
     def __init__(self, max_requests: int, per_seconds: float) -> None:
         self.max_requests = max_requests
         self.per_seconds = per_seconds
-        self._hits: Deque[float] = deque()
+        self._hits: Dict[str, Deque[float]] = defaultdict(deque)
 
-    def check(self) -> Optional[int]:
+    def check(self, client_key: str) -> Optional[int]:
         now = monotonic()
+        queue = self._hits[client_key]
         window_start = now - self.per_seconds
-        while self._hits and self._hits[0] < window_start:
-            self._hits.popleft()
-
-        if len(self._hits) >= self.max_requests:
-            retry_after = self._hits[0] + self.per_seconds - now
+        while queue and queue[0] < window_start:
+            queue.popleft()
+        if len(queue) >= self.max_requests:
+            retry_after = queue[0] + self.per_seconds - now
             return max(1, int(retry_after * 1000))
-
-        self._hits.append(now)
+        queue.append(now)
         return None
 
 
-def _parse_resolution(resolution: str) -> Tuple[int, int]:
-    if "x" not in resolution:
-        raise MCPError(
-            message="Resolution must be in WIDTHxHEIGHT format.",
-            error="ResolutionMismatchError",
-            error_code="ERR_RES_MISMATCH",
-            http_status=400,
-        )
-    width_str, height_str = resolution.split("x", 1)
-    if not width_str.isdigit() or not height_str.isdigit():
-        raise MCPError(
-            message="Resolution must use numeric dimensions.",
-            error="ResolutionMismatchError",
-            error_code="ERR_RES_MISMATCH",
-            http_status=400,
-        )
-    width, height = int(width_str), int(height_str)
-    if width <= 0 or height <= 0:
-        raise MCPError(
-            message="Resolution dimensions must be positive.",
-            error="ResolutionMismatchError",
-            error_code="ERR_RES_MISMATCH",
-            http_status=400,
-        )
-    return width, height
-
-
-def _validate_crop_normalized(region: "CaptureRegion") -> None:
-    x1, y1, x2, y2 = region.crop_normalized
-    for value in (x1, y1, x2, y2):
-        if value < 0 or value > 1:
-            raise MCPError(
-                message="crop_normalized values must be between 0 and 1.",
-                error="ValidationError",
-                error_code="ERR_VALIDATION",
-                http_status=400,
-            )
-    if x2 <= x1 or y2 <= y1:
-        raise MCPError(
-            message="crop_normalized must define a positive-width rectangle.",
-            error="ValidationError",
-            error_code="ERR_VALIDATION",
-            http_status=400,
-            )
-
-
-def _encode_image(image: np.ndarray, fmt: Literal["jpg", "png"]) -> Tuple[str, int, List[int]]:
-    if image.size == 0:
-        raise MCPError(
-            message="Crop region produced empty image.",
-            error="ValidationError",
-            error_code="ERR_VALIDATION",
-            http_status=400,
-        )
-    pil_image = Image.fromarray(image)
-    buffer = BytesIO()
-    save_format = "JPEG" if fmt == "jpg" else "PNG"
-    pil_image.save(buffer, format=save_format)
-    data = buffer.getvalue()
-    encoded = base64.b64encode(data).decode("ascii")
-    return encoded, len(data), [pil_image.width, pil_image.height]
-
-
-def _load_profile_regions(
-    repo: CalibrationRepository, resolution: str
-) -> List[CaptureRegion]:
-    raw = repo.load(resolution)
-    if not raw:
-        raise MCPError(
-            message="No calibration profile found for resolution.",
-            error="NoCalibrationProfileError",
-            error_code="ERR_NO_CALIBRATION",
-            http_status=400,
-        )
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise MCPError(
-            message="Calibration profile is invalid.",
-            error="NoCalibrationProfileError",
-            error_code="ERR_NO_CALIBRATION",
-            http_status=400,
-        ) from exc
-    regions = payload.get("regions", [])
-    if not isinstance(regions, list) or not regions:
-        raise MCPError(
-            message="Calibration profile has no regions.",
-            error="NoCalibrationProfileError",
-            error_code="ERR_NO_CALIBRATION",
-            http_status=400,
-        )
-    parsed: List[CaptureRegion] = []
-    for region in regions:
-        name = region.get("name")
-        crop = region.get("crop_normalized")
-        if not name or not isinstance(crop, list) or len(crop) != 4:
-            continue
-        parsed.append(CaptureRegion(name=name, crop_normalized=crop))
-    if not parsed:
-        raise MCPError(
-            message="Calibration profile has no usable regions.",
-            error="NoCalibrationProfileError",
-            error_code="ERR_NO_CALIBRATION",
-            http_status=400,
-        )
-    return parsed
-
-
 class PerceiveStateRequest(BaseModel):
-    timestamp: str = Field(..., description="ISO8601 timestamp")
-    resolution: str = Field(..., description="Resolution like 1920x1080")
-    debug: bool = False
-
-
-class GateSignals(BaseModel):
-    pixel_diff_pct: float
-    histogram_change: float
-
-
-class CroppedRegionEvidence(BaseModel):
-    name: str
-    crop_coords: List[int]
-    confidence_per_region: float
-
-
-class Evidence(BaseModel):
-    gate_triggered: bool
-    gate_signals: GateSignals
-    classifier_version: str
-    model_name: str
-    cropped_regions: List[CroppedRegionEvidence]
-    escalation_used: bool
+    resolution: str = Field(..., description="Resolution in WIDTHxHEIGHT format")
+    calibration_profile_id: Optional[str] = None
+    check_escalation: bool = True
 
 
 class PerceiveStateResponse(BaseModel):
     state: GameState
     confidence: float
-    timestamp: str
-    inference_latency_ms: int
-    evidence: Evidence
+    escalated: bool
+    evidence_image_base64: str
+    detected_at: str
 
 
 class CaptureRegion(BaseModel):
@@ -223,7 +92,7 @@ class CaptureRegion(BaseModel):
 
 class CaptureRegionsRequest(BaseModel):
     resolution: str
-    regions: List[CaptureRegion]
+    regions: List[CaptureRegion] = Field(default_factory=list)
     format: Literal["jpg", "png"] = "jpg"
 
 
@@ -239,22 +108,21 @@ class CaptureRegionsResponse(BaseModel):
     timestamp: str
     resolution: str
     regions: List[CapturedRegion]
-    total_capture_time_ms: int
 
 
 class NotifyDesktopRequest(BaseModel):
     title: str
-    body: str
-    urgency: Literal["low", "normal", "high"] = "normal"
+    message: str
+    urgency: Literal["critical", "normal", "low"] = "normal"
     sound: bool = True
-    action_url: Optional[str] = None
-    detection_id: Optional[int] = None
+    action: Optional[str] = None
 
 
 class NotifyDesktopResponse(BaseModel):
     notification_id: str
-    sent_at: str
     delivered: bool
+    platform: str
+    delivered_at: str
 
 
 class DiscordEmbedField(BaseModel):
@@ -283,36 +151,122 @@ class NotifyDiscordResponse(BaseModel):
     timestamp: str
 
 
+def _parse_resolution(resolution: str) -> Tuple[int, int]:
+    if "x" not in resolution:
+        raise MCPError("Resolution must be in WIDTHxHEIGHT format.", "ResolutionMismatchError", 400)
+    width_s, height_s = resolution.split("x", 1)
+    if not width_s.isdigit() or not height_s.isdigit():
+        raise MCPError("Resolution values must be numeric.", "ResolutionMismatchError", 400)
+    width, height = int(width_s), int(height_s)
+    if width <= 0 or height <= 0:
+        raise MCPError("Resolution values must be positive.", "ResolutionMismatchError", 400)
+    return width, height
+
+
+def _validate_region(region: CaptureRegion) -> None:
+    x1, y1, x2, y2 = region.crop_normalized
+    if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
+        raise MCPError("crop_normalized must be [x1,y1,x2,y2] in [0,1].", "ValidationError", 400)
+
+
+def _encode_image(image: np.ndarray, fmt: Literal["jpg", "png"]) -> Tuple[str, int, List[int]]:
+    if image.size == 0:
+        raise MCPError("Crop produced an empty image.", "ValidationError", 400)
+    pil = Image.fromarray(image)
+    buf = BytesIO()
+    pil.save(buf, format="JPEG" if fmt == "jpg" else "PNG")
+    payload = buf.getvalue()
+    return base64.b64encode(payload).decode("ascii"), len(payload), [pil.width, pil.height]
+
+
+def _encode_evidence_crop(frame: np.ndarray) -> str:
+    h, w = frame.shape[:2]
+    crop_w = min(320, w)
+    crop_h = min(240, h)
+    x1 = (w - crop_w) // 2
+    y1 = (h - crop_h) // 2
+    crop = frame[y1 : y1 + crop_h, x1 : x1 + crop_w]
+    encoded, _, _ = _encode_image(crop, "jpg")
+    return encoded
+
+
+def _load_profile_regions(repo: CalibrationRepository, resolution: str) -> List[CaptureRegion]:
+    payload = repo.load(resolution)
+    if not payload:
+        raise MCPError("No calibration profile found for resolution.", "NoCalibrationProfileError", 400)
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise MCPError("Calibration profile is invalid JSON.", "NoCalibrationProfileError", 400) from exc
+    regions = data.get("regions", [])
+    parsed: List[CaptureRegion] = []
+    for region in regions:
+        if not isinstance(region, dict):
+            continue
+        name = region.get("name")
+        crop = region.get("crop_normalized")
+        if not isinstance(name, str) or not isinstance(crop, list) or len(crop) != 4:
+            continue
+        parsed.append(CaptureRegion(name=name, crop_normalized=crop))
+    if not parsed:
+        raise MCPError("Calibration profile has no usable regions.", "NoCalibrationProfileError", 400)
+    return parsed
+
+
+def _send_desktop_notification(
+    title: str, message: str, urgency: str, sound: bool
+) -> bool:  # pragma: no cover - platform dependent
+    duration = {"critical": 10, "normal": 7, "low": 5}[urgency]
+    try:
+        from win10toast import ToastNotifier
+
+        toaster = ToastNotifier()
+        toaster.show_toast(title=title, msg=message, duration=duration, threaded=True)
+        return True
+    except Exception:
+        return False
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Overwatch Queue Notifier MCP Server", version="0.1.0")
     config = load_config()
+    run_migrations(config.db_path)
+
     screen_capture = ScreenCaptureService(window_title=config.overwatch_window_title)
     gate = GateService(config)
     classifier = ClassifierService(config)
+    state_machine = StateMachine()
     calibration_repo = CalibrationRepository(config.db_path)
+    detection_repo = DetectionRepository(config.db_path)
     notification_repo = NotificationRepository(config.db_path)
+
     app.state.last_frame = None
-    app.state.last_state = "IDLE"
-    app.state.last_confidence = 0.0
+    app.state.cache_result: Optional[PerceiveStateResponse] = None
+    app.state.cache_time = 0.0
+
+    # Startup retention cleanup for MVP.
+    try:
+        detection_repo.cleanup_older_than(hours=24)
+    except Exception:
+        pass
+
     rate_limits = {
-        "perceive_state": RateLimiter(max_requests=100, per_seconds=1.0),
-        "capture_regions": RateLimiter(max_requests=50, per_seconds=1.0),
-        "notify_desktop": RateLimiter(max_requests=100, per_seconds=60.0),
-        "notify_discord": RateLimiter(max_requests=10, per_seconds=10.0),
+        "perceive_state": RateLimiter(10, 1.0),
+        "capture_regions": RateLimiter(10, 1.0),
+        "notify_desktop": RateLimiter(10, 1.0),
+        "notify_discord": RateLimiter(10, 10.0),
     }
 
+    def _client_key(request: Request) -> str:
+        if request.client and request.client.host:
+            return request.client.host
+        return "unknown"
+
     @app.exception_handler(RequestValidationError)
-    async def validation_error_handler(
-        _request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(
             status_code=400,
-            content=ErrorResponse(
-                error="ValidationError",
-                error_code="ERR_VALIDATION",
-                message=str(exc),
-                timestamp=_now_iso(),
-            ).model_dump(),
+            content=ErrorResponse(error="ValidationError", message=str(exc)).model_dump(),
         )
 
     @app.exception_handler(MCPError)
@@ -321,216 +275,167 @@ def create_app() -> FastAPI:
             status_code=exc.http_status,
             content=ErrorResponse(
                 error=exc.error,
-                error_code=exc.error_code,
                 message=exc.message,
-                timestamp=_now_iso(),
                 retry_after_ms=exc.retry_after_ms,
             ).model_dump(),
         )
 
-    @app.post(
-        "/mcp/tools/screen.perceive_state",
-        response_model=PerceiveStateResponse,
-    )
-    async def perceive_state(request: PerceiveStateRequest) -> PerceiveStateResponse:
-        retry_after = rate_limits["perceive_state"].check()
+    @app.post("/mcp/tools/screen.perceive_state", response_model=PerceiveStateResponse)
+    async def perceive_state(request: PerceiveStateRequest, raw_request: Request) -> PerceiveStateResponse:
+        retry_after = rate_limits["perceive_state"].check(_client_key(raw_request))
         if retry_after is not None:
-            raise MCPError(
-                message="Too many requests.",
-                error="RateLimitedError",
-                error_code="ERR_RATE_LIMITED",
-                http_status=429,
-                retry_after_ms=retry_after,
-            )
+            raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
-        req_width, req_height = _parse_resolution(request.resolution)
-
+        req_w, req_h = _parse_resolution(request.resolution)
         try:
             frame = screen_capture.capture()
         except WindowNotFoundError as exc:
-            raise MCPError(
-                message=str(exc),
-                error="WindowNotFoundError",
-                error_code="ERR_WIN_NOT_FOUND",
-                http_status=400,
-            ) from exc
+            raise MCPError(str(exc), "WindowNotFoundError", 400) from exc
 
-        if frame.shape[1] != req_width or frame.shape[0] != req_height:
+        got_h, got_w = frame.shape[:2]
+        if got_w != req_w or got_h != req_h:
             raise MCPError(
-                message="Captured frame resolution does not match request.",
-                error="ResolutionMismatchError",
-                error_code="ERR_RES_MISMATCH",
-                http_status=400,
+                f"Window has resolution {got_w}x{got_h}, expected {req_w}x{req_h}",
+                "ResolutionMismatchError",
+                400,
             )
 
-        gate_triggered = True
-        if app.state.last_frame is not None:
-            gate_triggered = gate.should_process(app.state.last_frame, frame)
+        should_process = gate.should_process(
+            app.state.last_frame,
+            frame,
+            resolution=(req_w, req_h),
+        )
+        now = monotonic()
+        cache_age_ms = int((now - app.state.cache_time) * 1000) if app.state.cache_result else None
+        if not should_process and app.state.cache_result and cache_age_ms is not None and cache_age_ms < 500:
+            app.state.last_frame = frame
+            return app.state.cache_result
 
-        inference_latency_ms = 0
-        state = app.state.last_state
-        confidence = app.state.last_confidence
-        model_name = "None"
-        classifier_version = "none"
-        escalation_used = False
-
-        if gate_triggered or app.state.last_frame is None:
-            start = perf_counter()
-            result = classifier.predict_with_escalation(frame)
-            inference_latency_ms = int((perf_counter() - start) * 1000)
-            state = result.state
-            confidence = result.confidence
-            escalation_used = result.escalated
-            if escalation_used:
-                model_name = "MobileNetV2"
-                classifier_version = "escalation_v1.0"
+        try:
+            if request.check_escalation:
+                predicted_state, confidence, escalated = classifier.classify_with_escalation(frame)
             else:
-                model_name = "TinyMobileNetV3"
-                classifier_version = "tiny_v1.0"
+                predicted_state, confidence = classifier.predict(frame)
+                escalated = False
+        except AIInferenceError as exc:
+            raise MCPError(f"Classifier inference failed: {exc}", "AIInferenceError", 503) from exc
+
+        transition = state_machine.transition(predicted_state, confidence)
+        evidence_b64 = _encode_evidence_crop(frame)
+        detected_at = _now_iso()
+        response = PerceiveStateResponse(
+            state=transition.state,  # type: ignore[arg-type]
+            confidence=confidence,
+            escalated=escalated,
+            evidence_image_base64=evidence_b64,
+            detected_at=detected_at,
+        )
+
+        evidence = {
+            "resolution": request.resolution,
+            "predicted_state": predicted_state,
+            "applied_state": transition.state,
+            "transition_reason": transition.reason,
+            "gate_pixel_diff_pct": gate.last_signals.pixel_diff_pct if gate.last_signals else 0.0,
+            "gate_histogram_change": gate.last_signals.histogram_change if gate.last_signals else 0.0,
+        }
+        detection_id = detection_repo.insert(
+            state=transition.state,
+            confidence=confidence,
+            evidence=evidence,
+            escalated=escalated,
+            evidence_image_base64=evidence_b64,
+            window_resolution=request.resolution,
+        )
+        if transition.should_notify:
+            try:
+                notification_repo.insert(
+                    detection_id=detection_id,
+                    type="desktop",
+                    status="queued",
+                )
+            except Exception:
+                pass
 
         app.state.last_frame = frame
-        app.state.last_state = state
-        app.state.last_confidence = confidence
+        app.state.cache_result = response
+        app.state.cache_time = now
+        return response
 
-        signals = gate.last_signals or GateSignals(
-            pixel_diff_pct=0.0, histogram_change=0.0
-        )
-
-        evidence = Evidence(
-            gate_triggered=gate_triggered,
-            gate_signals=signals,
-            classifier_version=classifier_version,
-            model_name=model_name,
-            cropped_regions=[],
-            escalation_used=escalation_used,
-        )
-        return PerceiveStateResponse(
-            state=state,
-            confidence=confidence,
-            timestamp=_now_iso(),
-            inference_latency_ms=inference_latency_ms,
-            evidence=evidence,
-        )
-
-    @app.post(
-        "/mcp/tools/screen.capture_regions",
-        response_model=CaptureRegionsResponse,
-    )
-    async def capture_regions(
-        request: CaptureRegionsRequest,
-    ) -> CaptureRegionsResponse:
-        retry_after = rate_limits["capture_regions"].check()
+    @app.post("/mcp/tools/screen.capture_regions", response_model=CaptureRegionsResponse)
+    async def capture_regions(request: CaptureRegionsRequest, raw_request: Request) -> CaptureRegionsResponse:
+        retry_after = rate_limits["capture_regions"].check(_client_key(raw_request))
         if retry_after is not None:
-            raise MCPError(
-                message="Too many requests.",
-                error="RateLimitedError",
-                error_code="ERR_RATE_LIMITED",
-                http_status=429,
-                retry_after_ms=retry_after,
-            )
+            raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
-        req_width, req_height = _parse_resolution(request.resolution)
-        regions = request.regions
-        if not regions:
-            regions = _load_profile_regions(calibration_repo, request.resolution)
+        req_w, req_h = _parse_resolution(request.resolution)
+        regions = request.regions or _load_profile_regions(calibration_repo, request.resolution)
         for region in regions:
-            _validate_crop_normalized(region)
+            _validate_region(region)
 
         try:
             frame = screen_capture.capture()
         except WindowNotFoundError as exc:
-            raise MCPError(
-                message=str(exc),
-                error="WindowNotFoundError",
-                error_code="ERR_WIN_NOT_FOUND",
-                http_status=400,
-            ) from exc
+            raise MCPError(str(exc), "WindowNotFoundError", 400) from exc
 
-        if frame.shape[1] != req_width or frame.shape[0] != req_height:
+        got_h, got_w = frame.shape[:2]
+        if got_w != req_w or got_h != req_h:
             raise MCPError(
-                message="Captured frame resolution does not match request.",
-                error="ResolutionMismatchError",
-                error_code="ERR_RES_MISMATCH",
-                http_status=400,
+                f"Window has resolution {got_w}x{got_h}, expected {req_w}x{req_h}",
+                "ResolutionMismatchError",
+                400,
             )
 
-        start = perf_counter()
-        height, width = frame.shape[0], frame.shape[1]
         captured: List[CapturedRegion] = []
         for region in regions:
             x1, y1, x2, y2 = region.crop_normalized
-            left = int(x1 * width)
-            top = int(y1 * height)
-            right = int(x2 * width)
-            bottom = int(y2 * height)
+            left = int(x1 * req_w)
+            top = int(y1 * req_h)
+            right = int(x2 * req_w)
+            bottom = int(y2 * req_h)
             crop = frame[top:bottom, left:right]
-            data_base64, size_bytes, dims = _encode_image(crop, request.format)
+            data, size, dims = _encode_image(crop, request.format)
             captured.append(
                 CapturedRegion(
                     name=region.name,
-                    data_base64=data_base64,
+                    data_base64=data,
                     format=request.format,
-                    size_bytes=size_bytes,
+                    size_bytes=size,
                     dims=dims,
                 )
             )
+
         return CaptureRegionsResponse(
             timestamp=_now_iso(),
             resolution=request.resolution,
             regions=captured,
-            total_capture_time_ms=int((perf_counter() - start) * 1000),
         )
 
-    @app.post(
-        "/mcp/tools/notify.desktop",
-        response_model=NotifyDesktopResponse,
-    )
-    async def notify_desktop(
-        request: NotifyDesktopRequest,
-    ) -> NotifyDesktopResponse:
-        retry_after = rate_limits["notify_desktop"].check()
+    @app.post("/mcp/tools/notify.desktop", response_model=NotifyDesktopResponse)
+    async def notify_desktop(request: NotifyDesktopRequest, raw_request: Request) -> NotifyDesktopResponse:
+        retry_after = rate_limits["notify_desktop"].check(_client_key(raw_request))
         if retry_after is not None:
-            raise MCPError(
-                message="Too many requests.",
-                error="RateLimitedError",
-                error_code="ERR_RATE_LIMITED",
-                http_status=429,
-                retry_after_ms=retry_after,
-            )
+            raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
-        timestamp = _now_iso()
-        if request.detection_id is not None:
-            try:
-                notification_repo.insert(
-                    detection_id=request.detection_id,
-                    type="desktop",
-                    status="sent",
-                )
-            except Exception:
-                pass
-        notification_id = f"ow_notif_{timestamp.replace(':', '').replace('-', '')}"
+        delivered = _send_desktop_notification(
+            title=request.title,
+            message=request.message,
+            urgency=request.urgency,
+            sound=request.sound,
+        )
+        notification_id = f"desktop_{int(monotonic() * 1000)}"
         return NotifyDesktopResponse(
             notification_id=notification_id,
-            sent_at=timestamp,
-            delivered=True,
+            delivered=delivered,
+            platform="windows10",
+            delivered_at=_now_iso(),
         )
 
-    @app.post(
-        "/mcp/tools/notify.discord",
-        response_model=NotifyDiscordResponse,
-    )
-    async def notify_discord(
-        request: NotifyDiscordRequest,
-    ) -> NotifyDiscordResponse:
-        retry_after = rate_limits["notify_discord"].check()
+    @app.post("/mcp/tools/notify.discord", response_model=NotifyDiscordResponse)
+    async def notify_discord(request: NotifyDiscordRequest, raw_request: Request) -> NotifyDiscordResponse:
+        retry_after = rate_limits["notify_discord"].check(_client_key(raw_request))
         if retry_after is not None:
-            raise MCPError(
-                message="Discord rate limit exceeded.",
-                error="RateLimitedError",
-                error_code="ERR_RATE_LIMITED",
-                http_status=429,
-                retry_after_ms=retry_after,
-            )
+            raise MCPError("Discord rate limit exceeded.", "RateLimitedError", 429, retry_after)
 
         timestamp = _now_iso()
         if request.detection_id is not None:
