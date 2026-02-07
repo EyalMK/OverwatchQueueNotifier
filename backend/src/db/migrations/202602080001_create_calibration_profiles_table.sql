@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS calibration_profiles (
+    id TEXT PRIMARY KEY,
+    resolution TEXT NOT NULL UNIQUE,
+    regions_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active INTEGER DEFAULT 1
+);

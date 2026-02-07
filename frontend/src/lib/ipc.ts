@@ -10,6 +10,14 @@ interface PerceiveStateResponse {
 }
 
 export async function perceiveState(resolution: string): Promise<Detection> {
+  if (window.electronAPI?.perceiveState) {
+    try {
+      return await window.electronAPI.perceiveState(resolution);
+    } catch {
+      // Fall back to direct HTTP in case IPC bridge is unavailable.
+    }
+  }
+
   const response = await fetch(`${baseUrl}/mcp/tools/screen.perceive_state`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -30,4 +38,21 @@ export async function perceiveState(resolution: string): Promise<Detection> {
     confidence: payload.confidence,
     timestamp: payload.timestamp,
   };
+}
+
+export async function testNotification(): Promise<{ success: boolean }> {
+  if (window.electronAPI?.testNotification) {
+    return window.electronAPI.testNotification();
+  }
+
+  const response = await fetch(`${baseUrl}/mcp/tools/notify.desktop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Overwatch Queue Notifier",
+      message: "Test notification",
+    }),
+  });
+
+  return { success: response.ok };
 }

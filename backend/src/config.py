@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 
@@ -40,6 +40,7 @@ class AppConfig:
     escalation_confidence_threshold: float
     screen_capture_interval_ms: int
     discord_webhook_url: Optional[str]
+    cors_allowed_origins: List[str] = field(default_factory=list)
 
 
 def _get_int(name: str, default: int) -> int:
@@ -50,6 +51,11 @@ def _get_int(name: str, default: int) -> int:
 def _get_float(name: str, default: float) -> float:
     value = os.getenv(name)
     return float(value) if value is not None else default
+
+
+def _get_csv(name: str, default: str) -> List[str]:
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def load_config(env_path: Optional[str] = None) -> AppConfig:
@@ -78,4 +84,8 @@ def load_config(env_path: Optional[str] = None) -> AppConfig:
         ),
         screen_capture_interval_ms=_get_int("SCREEN_CAPTURE_INTERVAL_MS", 500),
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL") or None,
+        cors_allowed_origins=_get_csv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,null",
+        ),
     )

@@ -177,8 +177,10 @@ def test_pipeline_window_not_found_error(monkeypatch, temp_db: str) -> None:
     )
     client = TestClient(create_app())
     response = client.post("/mcp/tools/screen.perceive_state", json={"resolution": "1920x1080"})
-    assert response.status_code == 400
-    assert response.json()["error"] == "WindowNotFoundError"
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "IDLE"
+    assert payload["confidence"] == 0.0
 
 
 def test_pipeline_detection_logging_and_cleanup(monkeypatch, temp_db: str) -> None:

@@ -19,3 +19,22 @@ export interface Detection {
   timestamp: string;
   evidence?: DetectionEvidence;
 }
+
+export interface Region {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CalibrationProfile {
+  resolution: string;
+  regions: Record<string, Region>;
+}
+
+export interface Toast {
+  id: string;
+  message: string;
+  type: "success" | "error" | "info";
+  duration?: number;
+}

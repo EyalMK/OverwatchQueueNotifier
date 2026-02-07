@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ import numpy as np
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field, HttpUrl, conlist
@@ -32,6 +34,15 @@ GameState = Literal[
     "LOADING",
     "IN_GAME",
 ]
+
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+logger = logging.getLogger("owqn.mcp.server")
 
 
 def _now_iso() -> str:
@@ -213,6 +224,16 @@ def _load_profile_regions(repo: CalibrationRepository, resolution: str) -> List[
     return parsed
 
 
+def _idle_perceive_response() -> PerceiveStateResponse:
+    return PerceiveStateResponse(
+        state="IDLE",
+        confidence=0.0,
+        escalated=False,
+        evidence_image_base64="",
+        detected_at=_now_iso(),
+    )
+
+
 def _send_desktop_notification(
     title: str, message: str, urgency: str, sound: bool
 ) -> bool:  # pragma: no cover - platform dependent
@@ -231,6 +252,14 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Overwatch Queue Notifier MCP Server", version="0.1.0")
     config = load_config()
     run_migrations(config.db_path)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.cors_allowed_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+        max_age=600,
+    )
 
     screen_capture = ScreenCaptureService(window_title=config.overwatch_window_title)
     gate = GateService(config)
@@ -256,6 +285,7 @@ def create_app() -> FastAPI:
         "notify_desktop": RateLimiter(10, 1.0),
         "notify_discord": RateLimiter(10, 10.0),
     }
+    logger.info("MCP server initialized on port %s with CORS origins: %s", config.mcp_port, config.cors_allowed_origins)
 
     def _client_key(request: Request) -> str:
         if request.client and request.client.host:
@@ -264,6 +294,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        logger.warning("ValidationError: %s", exc)
         return JSONResponse(
             status_code=400,
             content=ErrorResponse(error="ValidationError", message=str(exc)).model_dump(),
@@ -271,6 +302,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(MCPError)
     async def mcp_error_handler(_request: Request, exc: MCPError) -> JSONResponse:
+        logger.warning("MCPError %s (%s): %s", exc.http_status, exc.error, exc.message)
         return JSONResponse(
             status_code=exc.http_status,
             content=ErrorResponse(
@@ -284,21 +316,27 @@ def create_app() -> FastAPI:
     async def perceive_state(request: PerceiveStateRequest, raw_request: Request) -> PerceiveStateResponse:
         retry_after = rate_limits["perceive_state"].check(_client_key(raw_request))
         if retry_after is not None:
+            logger.warning("perceive_state rate limited for client=%s", _client_key(raw_request))
             raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
         req_w, req_h = _parse_resolution(request.resolution)
         try:
             frame = screen_capture.capture()
-        except WindowNotFoundError as exc:
-            raise MCPError(str(exc), "WindowNotFoundError", 400) from exc
+        except WindowNotFoundError:
+            # Treat "game not currently visible" as an IDLE frame to keep frontend polling healthy.
+            logger.info("perceive_state: Overwatch window not found, returning IDLE")
+            return _idle_perceive_response()
 
         got_h, got_w = frame.shape[:2]
         if got_w != req_w or got_h != req_h:
-            raise MCPError(
-                f"Window has resolution {got_w}x{got_h}, expected {req_w}x{req_h}",
-                "ResolutionMismatchError",
-                400,
+            logger.info(
+                "perceive_state: resolution mismatch window=%sx%s request=%sx%s, returning IDLE",
+                got_w,
+                got_h,
+                req_w,
+                req_h,
             )
+            return _idle_perceive_response()
 
         should_process = gate.should_process(
             app.state.last_frame,
@@ -360,12 +398,19 @@ def create_app() -> FastAPI:
         app.state.last_frame = frame
         app.state.cache_result = response
         app.state.cache_time = now
+        logger.debug(
+            "perceive_state: state=%s confidence=%.3f escalated=%s",
+            response.state,
+            response.confidence,
+            response.escalated,
+        )
         return response
 
     @app.post("/mcp/tools/screen.capture_regions", response_model=CaptureRegionsResponse)
     async def capture_regions(request: CaptureRegionsRequest, raw_request: Request) -> CaptureRegionsResponse:
         retry_after = rate_limits["capture_regions"].check(_client_key(raw_request))
         if retry_after is not None:
+            logger.warning("capture_regions rate limited for client=%s", _client_key(raw_request))
             raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
         req_w, req_h = _parse_resolution(request.resolution)
@@ -415,6 +460,7 @@ def create_app() -> FastAPI:
     async def notify_desktop(request: NotifyDesktopRequest, raw_request: Request) -> NotifyDesktopResponse:
         retry_after = rate_limits["notify_desktop"].check(_client_key(raw_request))
         if retry_after is not None:
+            logger.warning("notify.desktop rate limited for client=%s", _client_key(raw_request))
             raise MCPError("Too many requests.", "RateLimitedError", 429, retry_after)
 
         delivered = _send_desktop_notification(
@@ -424,6 +470,7 @@ def create_app() -> FastAPI:
             sound=request.sound,
         )
         notification_id = f"desktop_{int(monotonic() * 1000)}"
+        logger.info("notify.desktop delivered=%s id=%s", delivered, notification_id)
         return NotifyDesktopResponse(
             notification_id=notification_id,
             delivered=delivered,
@@ -435,6 +482,7 @@ def create_app() -> FastAPI:
     async def notify_discord(request: NotifyDiscordRequest, raw_request: Request) -> NotifyDiscordResponse:
         retry_after = rate_limits["notify_discord"].check(_client_key(raw_request))
         if retry_after is not None:
+            logger.warning("notify.discord rate limited for client=%s", _client_key(raw_request))
             raise MCPError("Discord rate limit exceeded.", "RateLimitedError", 429, retry_after)
 
         timestamp = _now_iso()
@@ -447,11 +495,13 @@ def create_app() -> FastAPI:
                 )
             except Exception:
                 pass
-        return NotifyDiscordResponse(
+        response = NotifyDiscordResponse(
             discord_message_id=f"discord_{timestamp.replace(':', '').replace('-', '')}",
             status="delivered",
             timestamp=timestamp,
         )
+        logger.info("notify.discord status=%s id=%s", response.status, response.discord_message_id)
+        return response
 
     return app
 
